@@ -1,0 +1,16 @@
+{
+  "name": "setdoku",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SETDOKU: game kartu logika di browser",
+  "scripts": {
+    "test": "node --test \"tes/*.test.js\"",
+    "level": "node alat/buat-level.js",
+    "warna": "node alat/warna.js",
+    "uji:browser": "node tes-browser/uji.js",
+    "ikon": "node alat/buat-ikon.js"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.16.0"
+  }
+}

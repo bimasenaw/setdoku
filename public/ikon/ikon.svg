@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+    <rect width="512" height="512" rx="112" fill="#0b0e24"/>
+    <g transform="translate(96.88 271.6) rotate(-9) scale(1.56)">
+    <rect x="-48" y="-68" width="96" height="136" rx="12" fill="#1d2350" stroke="#7a84d6" stroke-width="3"/>
+    <g transform="scale(1.35)"><path d="M0.00 -21.00L5.29 -7.28L19.97 -6.49L8.56 2.78L12.34 16.99L0.00 9.00L-12.34 16.99L-8.56 2.78L-19.97 -6.49L-5.29 -7.28Z" fill="#fae242"/></g>
+  </g><g transform="translate(415.12 271.6) rotate(9) scale(1.56)">
+    <rect x="-48" y="-68" width="96" height="136" rx="12" fill="#1d2350" stroke="#7a84d6" stroke-width="3"/>
+    <g transform="scale(1.35)"><circle r="12.5" fill="#f0506e"/><ellipse rx="21" ry="6.5" fill="none" stroke="#f0506e" stroke-width="3" transform="rotate(-22)"/></g>
+  </g><g transform="translate(256 256) rotate(0) scale(1.56)">
+    <rect x="-48" y="-68" width="96" height="136" rx="12" fill="#1d2350" stroke="#7a84d6" stroke-width="3"/>
+    <g transform="scale(1.35)"><path d="M13 -17A19 19 0 1 0 13 17A21 21 0 0 1 13 -17Z" fill="#68dcf3"/></g>
+  </g>
+  </svg>

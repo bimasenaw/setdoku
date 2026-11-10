@@ -1,0 +1,1035 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0e24">
+<title>SETDOKU</title>
+<style>
+:root {
+  --malam: #0b0e24;
+  --malam-2: #151a3a;
+  --kartu: #1d2350;
+  --garis: #39417f;
+  --teks: #eef0ff;
+  --redup: #a9afd8;
+  --p1: #a594ff;
+  --p2: #3fe0b5;
+  --benar: #5ee08a;
+  --salah: #ff6b7d;
+  --celah: 8px;
+  --tinggi: 100vh;
+  --panel: 118px;
+  --sisi: clamp(130px, 19vw, 230px);
+  --lebar-kartu: min(
+    calc((100vw - 32px - 3 * var(--celah)) / 4),
+    calc((var(--tinggi) - 2 * var(--panel) - 76px) / 3 / 1.4),
+    150px
+  );
+}
+@supports (height: 100dvh) { :root { --tinggi: 100dvh; } }
+@media (orientation: landscape) {
+  :root {
+    --lebar-kartu: min(
+      calc((100vw - 2 * var(--sisi) - 64px - 3 * var(--celah)) / 4),
+      calc((var(--tinggi) - 76px) / 3 / 1.4),
+      150px
+    );
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  background-color: var(--malam);
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 18%, #fff9, transparent),
+    radial-gradient(1px 1px at 28% 72%, #fff8, transparent),
+    radial-gradient(1.5px 1.5px at 47% 33%, #fff7, transparent),
+    radial-gradient(1px 1px at 63% 86%, #fff8, transparent),
+    radial-gradient(1.5px 1.5px at 78% 12%, #fff9, transparent),
+    radial-gradient(1px 1px at 91% 58%, #fff8, transparent),
+    radial-gradient(70% 55% at 50% 50%, #232a6355, transparent);
+  color: var(--teks);
+  font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+button { font: inherit; color: inherit; touch-action: manipulation; }
+:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+.layar { height: var(--tinggi); width: 100%; }
+
+/* Menu */
+#layar-menu {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 24px 16px; text-align: center;
+}
+.logo { display: flex; gap: 10px; margin-bottom: 4px; }
+.logo svg { width: 62px; height: 87px; }
+h1 { font-size: clamp(42px, 11vw, 68px); line-height: 1; margin: 6px 0 0; font-weight: 800; letter-spacing: .5px; }
+.slogan { color: var(--redup); margin: 0 0 18px; font-size: 17px; }
+.tombol-menu {
+  width: min(280px, 100%); padding: 15px 20px; border-radius: 14px; cursor: pointer;
+  border: 2px solid var(--garis); background: var(--malam-2); font-size: 18px; font-weight: 700;
+}
+.tombol-menu.utama { background: var(--p1); border-color: var(--p1); color: #14123a; }
+.tombol-menu:hover { filter: brightness(1.1); }
+
+/* Cara bermain */
+#layar-cara { overflow-y: auto; padding: 24px 16px 32px; user-select: text; -webkit-user-select: text; }
+.isi-cara { max-width: 560px; margin: 0 auto; }
+h2 { font-size: 30px; margin: 0 0 14px; }
+.isi-cara p, .isi-cara li { line-height: 1.5; color: #d6d9f3; }
+.isi-cara ul { padding-left: 20px; margin: 8px 0; }
+.contoh { background: var(--malam-2); border: 1px solid var(--garis); border-radius: 14px; padding: 14px; margin: 14px 0; }
+.contoh h3 { margin: 0 0 10px; font-size: 16px; }
+.contoh .tanda-benar { color: var(--benar); }
+.contoh .tanda-salah { color: var(--salah); }
+.deret { display: flex; gap: 8px; margin-bottom: 10px; }
+.deret svg { width: min(92px, 28vw); height: auto; }
+.contoh p { margin: 0; font-size: 15px; }
+.isi-cara .tombol-menu { display: block; margin: 20px auto 0; }
+
+/* Permainan */
+#layar-main {
+  display: grid;
+  grid-template-rows: var(--panel) minmax(0, 1fr) var(--panel);
+  grid-template-areas: "dua" "tengah" "satu";
+}
+.pemain {
+  display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  padding: 8px 16px; min-width: 0; --warna: var(--p1);
+}
+.pemain.p1 { grid-area: satu; }
+.pemain.p2 { grid-area: dua; --warna: var(--p2); transform: rotate(180deg); }
+.baris-skor { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 8px; min-height: 22px; }
+.nama { font-weight: 700; color: var(--warna); font-size: 14px; white-space: nowrap; }
+.bintang-skor { display: flex; gap: 3px; }
+.bintang-skor svg { width: 17px; height: 17px; fill: none; stroke: var(--warna); stroke-width: 2; }
+.bintang-skor svg.isi { fill: var(--warna); }
+.aksi { display: flex; gap: 8px; }
+.aksi .tombol-rebut { flex: 1; min-width: 0; }
+.tombol-tukar {
+  flex: none; width: 72px; border-radius: 13px; cursor: pointer; padding: 0 4px;
+  border: 2px solid var(--warna); background: transparent; color: var(--warna);
+  font-size: 13px; font-weight: 800; line-height: 1.1;
+}
+.tombol-tukar[aria-pressed="true"] { background: var(--warna); color: #10122f; }
+.tombol-tukar:disabled { cursor: default; opacity: .38; }
+.tombol-rebut {
+  height: 50px; border: 0; border-radius: 13px; cursor: pointer; position: relative;
+  background: var(--warna); color: #10122f; font-size: 22px; font-weight: 800; letter-spacing: 1px;
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--warna) 60%, #000);
+  transition: transform .08s, opacity .15s;
+}
+.tombol-rebut:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 color-mix(in srgb, var(--warna) 60%, #000); }
+.tombol-rebut:disabled { cursor: default; opacity: .38; box-shadow: none; }
+.tombol-rebut.jalan { opacity: 1; font-size: 26px; font-variant-numeric: tabular-nums; }
+.kunci {
+  display: none; position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: #0003; letter-spacing: 0;
+}
+@media (hover: hover) { .kunci { display: block; } }
+.pesan { margin: 0; min-height: 18px; font-size: 14px; color: var(--redup); text-align: center; line-height: 18px; }
+
+.tengah {
+  grid-area: tengah; min-height: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px; padding: 0 16px;
+}
+.bar-atas { display: flex; align-items: center; gap: 8px; width: calc(var(--lebar-kartu) * 4 + 3 * var(--celah)); }
+.ikon {
+  flex: none; width: 32px; height: 32px; padding: 0; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--garis); background: var(--malam-2);
+  display: grid; place-items: center;
+}
+.ikon svg { width: 17px; height: 17px; fill: none; stroke: var(--teks); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.timer { flex: 1; height: 8px; border-radius: 4px; background: var(--malam-2); overflow: hidden; }
+.timer i { display: block; height: 100%; width: 100%; background: var(--warna-timer, transparent); transform-origin: left; }
+.timer.gawat i { background: var(--salah); }
+
+#meja { display: grid; grid-template-columns: repeat(4, var(--lebar-kartu)); gap: var(--celah); }
+.kartu {
+  width: var(--lebar-kartu); aspect-ratio: 100 / 140; padding: 0; border: 0; background: none;
+  border-radius: 10px; cursor: pointer; display: block; transition: transform .12s;
+}
+.kartu:disabled { cursor: default; }
+.kartu svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.kartu.dipilih { transform: translateY(-3px) scale(1.04); }
+.kartu.dipilih .tepi { stroke: var(--warna-timer, #fff); stroke-width: 5; }
+.kartu.benar .tepi { stroke: var(--benar); stroke-width: 6; }
+.kartu.salah .tepi { stroke: var(--salah); stroke-width: 6; }
+.kartu.salah { animation: goyang .35s; }
+.kartu.benar { animation: denyut .45s; }
+.kartu.masuk { animation: masuk .3s ease-out; }
+@keyframes goyang { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+@keyframes denyut { 50% { transform: scale(1.09); } }
+@keyframes masuk { from { transform: scale(.6) rotate(-6deg); opacity: 0; } }
+
+@media (orientation: landscape) {
+  #layar-main {
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: var(--sisi) minmax(0, 1fr) var(--sisi);
+    grid-template-areas: "satu tengah dua";
+  }
+  .pemain.p2 { transform: none; }
+  .tombol-rebut { height: 72px; }
+  .pesan { min-height: 40px; }
+}
+
+/* Pemenang */
+#layar-menang {
+  position: fixed; inset: 0; z-index: 5; background: #070a1dd9;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; padding: 16px; text-align: center;
+}
+#judul-menang { font-size: clamp(32px, 9vw, 52px); margin: 0; font-weight: 800; }
+#skor-akhir { color: var(--redup); font-size: 20px; margin: 0 0 12px; }
+
+/* Daftar level */
+#layar-peta { overflow-y: auto; padding: 16px 16px 32px; }
+.isi-peta { max-width: 420px; margin: 0 auto; }
+.bar-peta { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.bar-peta h2 { font-size: 20px; margin: 0; }
+.keterangan { color: var(--redup); margin: 0 0 14px; font-size: 15px; line-height: 1.4; }
+#daftar-level { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.tombol-level {
+  aspect-ratio: 1; padding: 0; border-radius: 12px; cursor: pointer; position: relative;
+  border: 2px solid var(--garis); background: var(--malam-2); font-size: 20px; font-weight: 800;
+}
+.tombol-level:hover { filter: brightness(1.15); }
+.tombol-level.selesai { border-color: var(--benar); color: var(--benar); }
+.tombol-level.selesai::after { content: "\2713"; position: absolute; top: 2px; right: 6px; font-size: 12px; }
+#uji-main { margin-top: 22px; color: var(--redup); font-size: 14px; }
+#uji-main summary { cursor: pointer; }
+.aksi-uji { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.aksi-uji button {
+  padding: 9px 12px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 700;
+  border: 1px solid var(--garis); background: var(--malam-2);
+}
+#teks-uji {
+  display: block; width: 100%; height: 130px; margin-top: 10px; padding: 8px; border-radius: 8px;
+  border: 1px solid var(--garis); background: var(--malam-2); color: var(--teks);
+  font: 12px/1.4 ui-monospace, Consolas, monospace; user-select: text; -webkit-user-select: text;
+}
+
+/* Papan Solo */
+#layar-solo {
+  --pool-baris: 1;
+  --celah-sedia: 6px;
+  --lebar-sedia: min(calc((100vw - 32px - 5 * var(--celah-sedia)) / 6), 64px);
+  --lebar-slot: min(
+    calc((100vw - 32px - 2 * var(--celah)) / 3),
+    calc((var(--tinggi) - 190px - var(--pool-baris) * (var(--lebar-sedia) * 1.4 + var(--celah-sedia)) - 2 * var(--celah)) / 3 / 1.4),
+    120px
+  );
+  display: flex; flex-direction: column; gap: 8px; padding: 8px 16px;
+}
+.bar-solo { display: flex; align-items: center; gap: 8px; flex: none; }
+#judul-level { flex: 1; font-weight: 800; font-size: 17px; text-align: center; }
+.area-solo {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+}
+.sisi-solo { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+#papan { display: grid; grid-template-columns: repeat(3, var(--lebar-slot)); gap: var(--celah); flex: none; }
+.slot, .sedia { padding: 0; border: 0; background: none; border-radius: 10px; display: block; aspect-ratio: 100 / 140; }
+.slot { width: var(--lebar-slot); cursor: pointer; }
+.slot svg, .sedia svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.slot.kosong { border: 2px dashed var(--garis); }
+.slot.siap { border-color: var(--p1); background: #a594ff1f; }
+.slot.tetap { cursor: default; }
+.slot.tetap .tepi { fill: #2b3274; stroke: #7a84d6; }
+.slot.gagal .tepi { stroke: var(--salah); stroke-width: 6; }
+.slot.benar .tepi { stroke: var(--benar); stroke-width: 6; }
+.slot.benar { animation: denyut .45s; }
+#pesan-solo {
+  margin: 0; min-height: 40px; max-width: 460px; font-size: 14px; line-height: 20px;
+  color: var(--redup); text-align: center;
+}
+#pesan-solo.salah { color: var(--salah); }
+#kartu-sedia {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: var(--celah-sedia);
+  max-width: calc(6 * var(--lebar-sedia) + 5 * var(--celah-sedia));
+}
+.sedia { width: var(--lebar-sedia); cursor: pointer; transition: transform .12s; }
+.sedia.dipilih { transform: translateY(-4px); }
+.sedia.dipilih .tepi { stroke: #fff; stroke-width: 6; }
+.sedia.terpakai { visibility: hidden; }
+#tombol-kunci { padding: 11px 20px; }
+#tombol-kunci:disabled { cursor: default; opacity: .4; filter: none; }
+
+@media (orientation: landscape) {
+  #layar-solo {
+    --lebar-slot: min(calc((var(--tinggi) - 68px - 2 * var(--celah)) / 3 / 1.4), 120px);
+    --lebar-sedia: min(calc((100vw - 3 * var(--lebar-slot) - 2 * var(--celah) - 56px - 5 * var(--celah-sedia)) / 6), 64px);
+  }
+  .area-solo { flex-direction: row; gap: 24px; }
+  .sisi-solo { flex: 1; min-width: 0; }
+}
+
+/* Hasil level */
+#layar-hasil {
+  position: fixed; inset: 0; z-index: 5; background: #070a1dd9;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; padding: 16px; text-align: center;
+}
+#judul-hasil { font-size: clamp(30px, 8vw, 46px); margin: 0; font-weight: 800; color: var(--benar); }
+#detail-hasil { color: var(--redup); font-size: 18px; margin: 0 0 12px; }
+
+/* Konfirmasi keluar */
+#dialog-keluar {
+  position: fixed; inset: 0; z-index: 10; background: #070a1de6;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.kotak-dialog {
+  width: min(340px, 100%); background: var(--malam-2); border: 2px solid var(--garis);
+  border-radius: 16px; padding: 22px 18px; text-align: center;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.kotak-dialog h2 { font-size: 22px; margin: 0; }
+.kotak-dialog p { margin: 0 0 6px; color: var(--redup); line-height: 1.4; }
+
+/* Layar pendek: tombol menu berjajar supaya tidak perlu digulir. */
+@media (orientation: landscape) and (max-height: 480px) {
+  #layar-menu { flex-flow: row wrap; align-content: center; gap: 10px; }
+  #layar-menu .logo, #layar-menu h1, #layar-menu .slogan { flex: 0 0 100%; justify-content: center; }
+  #layar-menu .logo svg { width: 44px; height: 62px; }
+  #layar-menu .tombol-menu { flex: 1 1 0; max-width: 190px; padding: 13px 8px; font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kartu, .tombol-rebut, .sedia { transition: none; }
+  .kartu.salah, .kartu.benar, .kartu.masuk, .slot.benar { animation: none; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs id="pola"></defs></svg>
+
+<section id="layar-menu" class="layar">
+  <div class="logo" id="logo" aria-hidden="true"></div>
+  <h1>SETDOKU</h1>
+  <p class="slogan">Puzzle dan duel tiga kartu</p>
+  <button class="tombol-menu utama" id="tombol-solo">Main sendiri</button>
+  <button class="tombol-menu" id="tombol-mulai">Main berdua</button>
+  <button class="tombol-menu" id="tombol-cara">Cara bermain</button>
+</section>
+
+<section id="layar-cara" class="layar" hidden>
+  <div class="isi-cara">
+    <h2>Cara bermain</h2>
+    <p>Setiap kartu punya empat sifat:</p>
+    <ul>
+      <li><b>Bentuk:</b> bintang, bulan sabit, atau planet</li>
+      <li><b>Warna:</b> emas, biru es, atau koral</li>
+      <li><b>Jumlah:</b> satu, dua, atau tiga simbol</li>
+      <li><b>Isian:</b> penuh, garis tepi, atau bertitik</li>
+    </ul>
+    <p>Tiga kartu membentuk <b>rasi</b> kalau setiap sifatnya semua sama atau semua beda.</p>
+    <div class="contoh">
+      <h3 class="tanda-benar">Rasi: tiga sifat sama, satu beda</h3>
+      <div class="deret" id="contoh-1"></div>
+      <p>Bentuk, warna, dan isian sama. Jumlahnya semua beda.</p>
+    </div>
+    <div class="contoh">
+      <h3 class="tanda-benar">Rasi: semua sifat beda</h3>
+      <div class="deret" id="contoh-2"></div>
+      <p>Bentuk, warna, jumlah, dan isian semuanya berbeda.</p>
+    </div>
+    <div class="contoh">
+      <h3 class="tanda-salah">Bukan rasi</h3>
+      <div class="deret" id="contoh-3"></div>
+      <p>Warnanya emas, emas, koral. Dua sama dan satu beda tidak dihitung.</p>
+    </div>
+    <h3>Main sendiri</h3>
+    <p>Susun kartu di papan 3 × 3 sampai <b>setiap baris dan setiap kolom</b> membentuk rasi. Kartu yang sudah terpasang adalah petunjuk dan tidak bisa dipindah.</p>
+    <ul>
+      <li>Ketuk kartu tersedia, lalu ketuk slot kosong.</li>
+      <li>Ketuk kartu yang sudah kamu pasang untuk mengambilnya lagi.</li>
+      <li>Dua kartu dalam satu garis selalu punya tepat satu kartu ketiga.</li>
+      <li>Tidak semua kartu tersedia harus dipakai. Sebagian adalah pengecoh.</li>
+    </ul>
+    <h3>Main berdua</h3>
+    <p>Lihat rasi? Tekan tombolmu lebih dulu (<b>A</b> atau <b>L</b> di keyboard), lalu pilih tiga kartu dalam 8 detik.</p>
+    <ul>
+      <li>Benar: kamu dapat 1 poin.</li>
+      <li>Salah atau waktu habis: lawan dapat 1 poin.</li>
+      <li>Yang pertama mencapai 5 poin menang.</li>
+    </ul>
+    <p>Buntu, tidak ada yang melihat rasi? Kalau <b>kedua</b> pemain menekan <b>Tukar</b>, tiga kartu diganti dan poin tidak berubah.</p>
+    <button class="tombol-menu utama" id="tombol-tutup-cara">Kembali</button>
+  </div>
+</section>
+
+<section id="layar-peta" class="layar" hidden>
+  <div class="isi-peta">
+    <div class="bar-peta">
+      <button class="ikon" id="tombol-peta-keluar" aria-label="Kembali ke menu">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <h2>Chapter 1: Rookie Solver</h2>
+    </div>
+    <p class="keterangan">Practice: tanpa batas waktu dan tanpa nyawa.</p>
+    <div id="daftar-level"></div>
+    <details id="uji-main">
+      <summary id="judul-uji"></summary>
+      <div class="aksi-uji">
+        <button id="tombol-salin-uji">Salin data</button>
+        <button id="tombol-hapus-uji">Hapus data</button>
+      </div>
+      <textarea id="teks-uji" readonly hidden aria-label="Data uji main"></textarea>
+    </details>
+  </div>
+</section>
+
+<section id="layar-solo" class="layar" hidden>
+  <div class="bar-solo">
+    <button class="ikon" id="tombol-solo-keluar" aria-label="Kembali ke daftar level">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <span id="judul-level"></span>
+    <button class="ikon" id="tombol-kosongkan" aria-label="Kosongkan papan">
+      <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/></svg>
+    </button>
+    <button class="ikon tombol-suara" aria-label="Matikan suara"></button>
+  </div>
+  <div class="area-solo">
+    <div id="papan" role="group" aria-label="Papan 3 kali 3"></div>
+    <div class="sisi-solo">
+      <p id="pesan-solo" aria-live="polite"></p>
+      <div id="kartu-sedia" role="group" aria-label="Kartu tersedia"></div>
+      <button class="tombol-menu utama" id="tombol-kunci">Kunci jawaban</button>
+    </div>
+  </div>
+</section>
+
+<section id="layar-main" class="layar" hidden>
+  <div class="pemain p2" data-pemain="1">
+    <div class="baris-skor"><span class="nama">Pemain 2</span><span class="bintang-skor"></span></div>
+    <div class="aksi">
+      <button class="tombol-rebut"><span class="label">RASI!</span><span class="kunci">L</span></button>
+      <button class="tombol-tukar" aria-pressed="false" aria-label="Tukar kartu, butuh persetujuan kedua pemain">Tukar</button>
+    </div>
+    <p class="pesan" aria-live="polite"></p>
+  </div>
+
+  <div class="tengah">
+    <div class="bar-atas">
+      <button class="ikon" id="tombol-keluar" aria-label="Kembali ke menu">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="timer" id="timer"><i></i></div>
+      <button class="ikon tombol-suara" aria-label="Matikan suara"></button>
+    </div>
+    <div id="meja"></div>
+  </div>
+
+  <div class="pemain p1" data-pemain="0">
+    <div class="baris-skor"><span class="nama">Pemain 1</span><span class="bintang-skor"></span></div>
+    <div class="aksi">
+      <button class="tombol-rebut"><span class="label">RASI!</span><span class="kunci">A</span></button>
+      <button class="tombol-tukar" aria-pressed="false" aria-label="Tukar kartu, butuh persetujuan kedua pemain">Tukar</button>
+    </div>
+    <p class="pesan" aria-live="polite"></p>
+  </div>
+</section>
+
+<section id="layar-menang" hidden>
+  <p id="judul-menang"></p>
+  <p id="skor-akhir"></p>
+  <button class="tombol-menu utama" id="tombol-ulang">Main lagi</button>
+  <button class="tombol-menu" id="tombol-menu">Menu</button>
+</section>
+
+<section id="layar-hasil" hidden>
+  <p id="judul-hasil"></p>
+  <p id="detail-hasil"></p>
+  <button class="tombol-menu utama" id="tombol-level-lanjut">Level berikutnya</button>
+  <button class="tombol-menu" id="tombol-level-ulang">Ulangi</button>
+  <button class="tombol-menu" id="tombol-level-peta">Daftar level</button>
+</section>
+
+<div id="dialog-keluar" role="dialog" aria-modal="true" aria-labelledby="judul-keluar" hidden>
+  <div class="kotak-dialog">
+    <h2 id="judul-keluar">Keluar dari pertandingan?</h2>
+    <p>Skor saat ini akan hilang.</p>
+    <button class="tombol-menu utama" id="tombol-lanjut-main">Lanjut main</button>
+    <button class="tombol-menu" id="tombol-yakin-keluar">Keluar</button>
+  </div>
+</div>
+
+<script src="logika.js"></script>
+<script src="puzzle.js"></script>
+<script src="level.js"></script>
+<script>
+(function () {
+  const L = window.Logika;
+  const P = window.Puzzle;
+  const LEVEL = window.DataLevel;
+  const JEDA_HASIL_MS = 1100;
+  const JEDA_MENANG_SOLO_MS = 700;
+  const KUNCI_UJI = 'setdoku-uji';
+  const KARTU_PER_BARIS = 6;
+  const WARNA = [
+    { nama: 'emas', hex: '#fae242' },
+    { nama: 'biru es', hex: '#68dcf3' },
+    { nama: 'koral', hex: '#f0506e' },
+  ];
+  const BENTUK = ['bintang', 'bulan sabit', 'planet'];
+  const ISIAN = ['penuh', 'garis tepi', 'bertitik'];
+  const WARNA_PEMAIN = ['var(--p1)', 'var(--p2)'];
+
+  const $ = (id) => document.getElementById(id);
+  const panel = [document.querySelector('.p1'), document.querySelector('.p2')];
+  const tombolRebut = panel.map((p) => p.querySelector('.tombol-rebut'));
+  const tombolTukar = panel.map((p) => p.querySelector('.tombol-tukar'));
+  const mejaEl = $('meja');
+  const timerEl = $('timer');
+  const timerIsi = timerEl.firstElementChild;
+
+  let s = null;
+  let intervalTimer = null;
+  let jedaHasil = null;
+  let batasWaktu = 0;
+  let detikTerakhir = 0;
+  let kartuEl = [];
+  let idTampil = [];
+
+  /* Kartu */
+  function jalurBintang() {
+    let d = '';
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 ? 9 : 21;
+      const sudut = (-90 + i * 36) * Math.PI / 180;
+      d += (i ? 'L' : 'M') + (r * Math.cos(sudut)).toFixed(2) + ' ' + (r * Math.sin(sudut)).toFixed(2);
+    }
+    return d + 'Z';
+  }
+  const BINTANG = jalurBintang();
+  const BULAN = 'M13 -17A19 19 0 1 0 13 17A21 21 0 0 1 13 -17Z';
+
+  function simbol(k, y) {
+    const c = WARNA[k.warna].hex;
+    const isi = k.isian === 0 ? c : k.isian === 1 ? 'none' : `url(#titik-${k.warna})`;
+    const gaya = `fill="${isi}" stroke="${c}" stroke-width="2.4" stroke-linejoin="round"`;
+    const bentuk = [
+      `<path d="${BINTANG}" ${gaya}/>`,
+      `<path d="${BULAN}" ${gaya}/>`,
+      `<circle r="12.5" ${gaya}/><ellipse rx="21" ry="6.5" fill="none" stroke="${c}" stroke-width="2.4" transform="rotate(-22)"/>`,
+    ][k.bentuk];
+    return `<g transform="translate(50 ${y}) scale(.98)">${bentuk}</g>`;
+  }
+
+  function svgKartu(k) {
+    const posisi = [[70], [48, 92], [27, 70, 113]][k.jumlah];
+    return `<svg viewBox="0 0 100 140" aria-hidden="true">
+      <rect class="tepi" x="2" y="2" width="96" height="136" rx="11" fill="#1d2350" stroke="#39417f" stroke-width="2"/>
+      ${posisi.map((y) => simbol(k, y)).join('')}</svg>`;
+  }
+
+  function namaKartu(k) {
+    return `${k.jumlah + 1} ${BENTUK[k.bentuk]} ${WARNA[k.warna].nama} ${ISIAN[k.isian]}`;
+  }
+
+  /* Suara */
+  let audio = null;
+  let bisu = false;
+  try {
+    // 'rasi-bisu' adalah kunci lama sebelum game diganti nama menjadi SETDOKU.
+    bisu = (localStorage.getItem('setdoku-bisu') ?? localStorage.getItem('rasi-bisu')) === '1';
+  } catch (e) {}
+
+  function nada(frek, mulai, lama, jenis = 'triangle') {
+    if (bisu) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
+      const t = audio.currentTime + mulai;
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.type = jenis;
+      osc.frequency.value = frek;
+      gain.gain.setValueAtTime(0.14, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + lama);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(t);
+      osc.stop(t + lama);
+    } catch (e) {}
+  }
+  const suara = {
+    rebut: () => nada(660, 0, 0.12),
+    pilih: () => nada(520, 0, 0.07),
+    tukar: () => [392, 523].forEach((f, i) => nada(f, i * 0.08, 0.12)),
+    detik: () => nada(880, 0, 0.06, 'square'),
+    benar: () => [523, 659, 784].forEach((f, i) => nada(f, i * 0.09, 0.2)),
+    salah: () => [196, 147].forEach((f, i) => nada(f, i * 0.13, 0.24, 'sawtooth')),
+    menang: () => [523, 659, 784, 1047].forEach((f, i) => nada(f, i * 0.12, 0.3)),
+  };
+
+  function gambarIkonSuara() {
+    const gelombang = bisu ? '<path d="M16 9l5 6M21 9l-5 6"/>' : '<path d="M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/>';
+    document.querySelectorAll('.tombol-suara').forEach((b) => {
+      b.innerHTML = `<svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10z"/>${gelombang}</svg>`;
+      b.setAttribute('aria-label', bisu ? 'Nyalakan suara' : 'Matikan suara');
+    });
+  }
+
+  /* Tampilan */
+  function tampilkan(nama) {
+    ['menu', 'cara', 'main', 'peta', 'solo'].forEach((n) => { $('layar-' + n).hidden = n !== nama; });
+    $('layar-menang').hidden = true;
+    $('layar-hasil').hidden = true;
+  }
+
+  function siapkanMeja() {
+    mejaEl.textContent = '';
+    kartuEl = [];
+    idTampil = [];
+    for (let i = 0; i < L.UKURAN_MEJA; i++) {
+      const b = document.createElement('button');
+      b.className = 'kartu';
+      b.addEventListener('click', () => klikKartu(i));
+      mejaEl.appendChild(b);
+      kartuEl.push(b);
+      idTampil.push(null);
+    }
+  }
+
+  function gambarMeja() {
+    s.meja.forEach((k, i) => {
+      const b = kartuEl[i];
+      const baru = idTampil[i] !== k.id;
+      if (baru) {
+        b.innerHTML = svgKartu(k);
+        b.setAttribute('aria-label', namaKartu(k));
+        idTampil[i] = k.id;
+      }
+      const dipilih = s.pilihan.includes(i);
+      const hasil = s.fase === 'hasil' && dipilih && s.hasil.jenis !== 'waktu';
+      b.classList.toggle('masuk', baru);
+      b.classList.toggle('dipilih', dipilih);
+      b.classList.toggle('benar', hasil && s.hasil.jenis === 'benar');
+      b.classList.toggle('salah', hasil && s.hasil.jenis === 'salah');
+      b.disabled = s.fase !== 'memilih';
+      b.setAttribute('aria-pressed', dipilih ? 'true' : 'false');
+    });
+  }
+
+  function gambarSkor() {
+    panel.forEach((p, i) => {
+      const wadah = p.querySelector('.bintang-skor');
+      let isi = '';
+      for (let n = 0; n < L.SKOR_MENANG; n++) {
+        isi += `<svg viewBox="-24 -24 48 48" class="${n < s.skor[i] ? 'isi' : ''}"><path d="${BINTANG}" stroke-width="4"/></svg>`;
+      }
+      wadah.innerHTML = isi;
+      wadah.setAttribute('aria-label', `${s.skor[i]} dari ${L.SKOR_MENANG} poin`);
+      wadah.setAttribute('role', 'img');
+    });
+  }
+
+  function teksPesan(p) {
+    const lawan = `Pemain ${1 - p + 1}`;
+    if (s.fase === 'rebutan') {
+      if (s.setuju[p]) return 'Menunggu lawan setuju tukar kartu';
+      if (s.setuju[1 - p]) return `${lawan} ingin tukar kartu`;
+      if (s.penukaran === 'otomatis') return 'Tidak ada rasi, kartu ditukar';
+      if (s.penukaran === 'bersama') return 'Kartu ditukar. Lihat rasi?';
+      return 'Lihat rasi? Tekan tombolmu!';
+    }
+    if (s.fase === 'memilih') {
+      if (s.aktif !== p) return `${lawan} sedang memilih`;
+      return `Pilih 3 kartu (${s.pilihan.length}/3)`;
+    }
+    if (s.fase === 'hasil') {
+      const h = s.hasil;
+      if (h.jenis === 'benar') return h.pencetak === p ? 'Benar! +1 poin' : `Rasi benar, ${lawan} +1`;
+      if (h.pencetak === p) return h.jenis === 'waktu' ? 'Waktu lawan habis. +1 poin' : 'Lawan salah. +1 poin';
+      return h.jenis === 'waktu' ? 'Waktu habis' : `Salah di ${h.gagal.join(', ')}`;
+    }
+    return '';
+  }
+
+  function gambarPemain() {
+    panel.forEach((p, i) => {
+      const aktif = s.fase === 'memilih' && s.aktif === i;
+      const tombol = tombolRebut[i];
+      tombol.disabled = s.fase !== 'rebutan' && !aktif;
+      tombol.classList.toggle('jalan', aktif);
+      if (!aktif) tombol.querySelector('.label').textContent = 'RASI!';
+      tombolTukar[i].disabled = s.fase !== 'rebutan';
+      tombolTukar[i].setAttribute('aria-pressed', s.setuju[i] ? 'true' : 'false');
+      p.querySelector('.pesan').textContent = teksPesan(i);
+    });
+  }
+
+  function gambarSemua() {
+    gambarMeja();
+    gambarSkor();
+    gambarPemain();
+  }
+
+  /* Alur permainan */
+  function hentikanTimer() {
+    clearInterval(intervalTimer);
+    intervalTimer = null;
+    timerIsi.style.transform = 'scaleX(0)';
+    timerEl.classList.remove('gawat');
+  }
+
+  function bersihkan() {
+    hentikanTimer();
+    clearTimeout(jedaHasil);
+    jedaHasil = null;
+  }
+
+  function mulai() {
+    bersihkan();
+    s = L.buatPermainan();
+    tampilkan('main');
+    siapkanMeja();
+    gambarSemua();
+  }
+
+  function keMenu() {
+    bersihkan();
+    s = null;
+    $('dialog-keluar').hidden = true;
+    tampilkan('menu');
+  }
+
+  function bukaDialogKeluar() {
+    $('dialog-keluar').hidden = false;
+    $('tombol-lanjut-main').focus();
+  }
+
+  function tutupDialogKeluar() {
+    $('dialog-keluar').hidden = true;
+    $('tombol-keluar').focus();
+  }
+
+  function tukar(pemain) {
+    if (!s) return;
+    const r = L.tukarKartu(s, pemain);
+    if (!r) return;
+    if (r.ditukar) suara.tukar(); else suara.pilih();
+    gambarSemua();
+  }
+
+  function tekan(pemain) {
+    if (!s || !L.tekanTombol(s, pemain)) return;
+    suara.rebut();
+    batasWaktu = performance.now() + L.DURASI_MS;
+    detikTerakhir = 0;
+    document.documentElement.style.setProperty('--warna-timer', WARNA_PEMAIN[pemain]);
+    intervalTimer = setInterval(detak, 50);
+    gambarSemua();
+    detak();
+  }
+
+  function detak() {
+    const sisa = batasWaktu - performance.now();
+    if (sisa <= 0) {
+      hentikanTimer();
+      tampilkanHasil(L.waktuHabis(s));
+      return;
+    }
+    timerIsi.style.transform = `scaleX(${sisa / L.DURASI_MS})`;
+    timerEl.classList.toggle('gawat', sisa < 3000);
+    const detik = Math.ceil(sisa / 1000);
+    if (detik !== detikTerakhir) {
+      detikTerakhir = detik;
+      tombolRebut[s.aktif].querySelector('.label').textContent = detik;
+      if (detik <= 3) suara.detik();
+    }
+  }
+
+  function klikKartu(i) {
+    if (!s) return;
+    const r = L.pilihKartu(s, s.aktif, i);
+    if (!r) return;
+    if (r.selesai) {
+      hentikanTimer();
+      tampilkanHasil(r.hasil);
+    } else {
+      suara.pilih();
+      gambarSemua();
+    }
+  }
+
+  function tampilkanHasil(hasil) {
+    if (hasil.jenis === 'benar') suara.benar(); else suara.salah();
+    gambarSemua();
+    jedaHasil = setTimeout(selesaiHasil, JEDA_HASIL_MS);
+  }
+
+  function selesaiHasil() {
+    L.lanjutRonde(s);
+    if (s.fase === 'selesai') {
+      suara.menang();
+      $('judul-menang').textContent = `Pemain ${s.pemenang + 1} menang!`;
+      $('judul-menang').style.color = WARNA_PEMAIN[s.pemenang];
+      $('skor-akhir').textContent = `${s.skor[0]} : ${s.skor[1]}`;
+      $('layar-menang').hidden = false;
+      return;
+    }
+    gambarSemua();
+  }
+
+  /* Data uji main: setiap level selesai dicatat di perangkat ini. */
+  function muatUji() {
+    try { return JSON.parse(localStorage.getItem(KUNCI_UJI)) || []; } catch (e) { return []; }
+  }
+
+  function catatUji(catatan) {
+    try { localStorage.setItem(KUNCI_UJI, JSON.stringify([...muatUji(), catatan])); } catch (e) {}
+  }
+
+  function teksUji() {
+    const baris = muatUji().map((c) => [c.level, c.detik, c.kunciSalah, c.waktu].join(','));
+    return ['level,detik,kunci_salah,waktu', ...baris].join('\n');
+  }
+
+  // Clipboard tidak tersedia di alamat http biasa, jadi datanya selalu juga
+  // ditampilkan di kotak teks supaya bisa disalin manual.
+  async function salinUji() {
+    const tombol = $('tombol-salin-uji');
+    const kotak = $('teks-uji');
+    kotak.value = teksUji();
+    kotak.hidden = false;
+    kotak.select();
+    try {
+      await navigator.clipboard.writeText(kotak.value);
+      tombol.textContent = 'Tersalin';
+    } catch (e) {
+      tombol.textContent = 'Salin manual dari kotak';
+    }
+    setTimeout(() => { tombol.textContent = 'Salin data'; }, 2500);
+  }
+
+  function hapusUji() {
+    if (!window.confirm('Hapus semua data uji main di perangkat ini?')) return;
+    try { localStorage.removeItem(KUNCI_UJI); } catch (e) {}
+    $('teks-uji').hidden = true;
+    gambarPeta();
+  }
+
+  /* Solo */
+  let sesi = null;
+  let levelAktif = null;
+  let mulaiLevelMs = 0;
+  let jedaMenangSolo = null;
+  let slotEl = [];
+  let sediaEl = [];
+
+  function gambarPeta() {
+    const data = muatUji();
+    const selesai = new Set(data.map((c) => c.level));
+    const wadah = $('daftar-level');
+    wadah.textContent = '';
+    LEVEL.forEach((l) => {
+      const b = document.createElement('button');
+      const sudah = selesai.has(l.level);
+      b.className = 'tombol-level' + (sudah ? ' selesai' : '');
+      b.textContent = l.level;
+      b.setAttribute('aria-label', `Level ${l.level}${sudah ? ', selesai' : ''}`);
+      b.addEventListener('click', () => mulaiLevel(l.level));
+      wadah.appendChild(b);
+    });
+    $('judul-uji').textContent = `Data uji main (${data.length} catatan)`;
+  }
+
+  function kePeta() {
+    hentikanSolo();
+    gambarPeta();
+    tampilkan('peta');
+  }
+
+  function hentikanSolo() {
+    clearTimeout(jedaMenangSolo);
+    jedaMenangSolo = null;
+    sesi = null;
+  }
+
+  function buatTombolKartu(wadah, kelas, saatDitekan) {
+    const b = document.createElement('button');
+    b.className = kelas;
+    b.addEventListener('click', saatDitekan);
+    wadah.appendChild(b);
+    return b;
+  }
+
+  function mulaiLevel(nomor) {
+    hentikanSolo();
+    levelAktif = LEVEL[nomor - 1];
+    sesi = P.mulaiSesi(levelAktif.practice);
+    mulaiLevelMs = performance.now();
+    $('judul-level').textContent = `Level ${nomor}`;
+    $('layar-solo').style.setProperty('--pool-baris', Math.ceil(sesi.tersedia.length / KARTU_PER_BARIS));
+
+    $('papan').textContent = '';
+    slotEl = sesi.papan.map((_, i) => buatTombolKartu($('papan'), 'slot', () => tekanSlotSolo(i)));
+    $('kartu-sedia').textContent = '';
+    sediaEl = sesi.tersedia.map((id) => {
+      const b = buatTombolKartu($('kartu-sedia'), 'sedia', () => tekanKartuSolo(id));
+      b.innerHTML = svgKartu(P.DEK[id]);
+      b.setAttribute('aria-label', namaKartu(P.DEK[id]));
+      return b;
+    });
+
+    tampilkan('solo');
+    gambarSolo();
+  }
+
+  function labelSlot(i) {
+    const posisi = `Baris ${Math.floor(i / 3) + 1} kolom ${(i % 3) + 1}`;
+    const k = sesi.papan[i];
+    if (k === null) return `${posisi}, kosong`;
+    return `${posisi}, ${namaKartu(P.DEK[k])}${sesi.tetap[i] ? ', petunjuk' : ''}`;
+  }
+
+  function teksPesanSolo() {
+    if (sesi.gagal.length) {
+      const daftar = sesi.gagal.slice(0, 3).map((g) => `${g.nama} (${g.sifat.join(', ')})`).join(', ');
+      const lebih = sesi.gagal.length > 3 ? ` dan ${sesi.gagal.length - 3} garis lain` : '';
+      return `Belum rasi: ${daftar}${lebih}`;
+    }
+    if (sesi.terpilih !== null) return 'Sekarang ketuk slot untuk kartu ini.';
+    return levelAktif.pesan || 'Setiap baris dan kolom harus jadi rasi.';
+  }
+
+  function gambarSolo() {
+    const slotGagal = new Set(sesi.gagal.flatMap((g) => g.slot));
+    sesi.papan.forEach((k, i) => {
+      const b = slotEl[i];
+      b.innerHTML = k === null ? '' : svgKartu(P.DEK[k]);
+      b.classList.toggle('kosong', k === null);
+      b.classList.toggle('tetap', sesi.tetap[i]);
+      b.classList.toggle('siap', k === null && sesi.terpilih !== null);
+      b.classList.toggle('gagal', slotGagal.has(i));
+      b.classList.toggle('benar', sesi.selesai);
+      b.disabled = sesi.tetap[i] || sesi.selesai;
+      b.setAttribute('aria-label', labelSlot(i));
+    });
+    sesi.tersedia.forEach((id, n) => {
+      const dipakai = P.kartuDipakai(sesi, id);
+      sediaEl[n].classList.toggle('terpakai', dipakai);
+      sediaEl[n].classList.toggle('dipilih', sesi.terpilih === id);
+      sediaEl[n].disabled = dipakai || sesi.selesai;
+      sediaEl[n].setAttribute('aria-pressed', sesi.terpilih === id ? 'true' : 'false');
+    });
+    $('pesan-solo').textContent = teksPesanSolo();
+    $('pesan-solo').classList.toggle('salah', sesi.gagal.length > 0);
+    $('tombol-kunci').disabled = sesi.papan.includes(null) || sesi.selesai;
+  }
+
+  function tekanKartuSolo(id) {
+    if (!sesi || !P.tekanKartu(sesi, id)) return;
+    suara.pilih();
+    gambarSolo();
+  }
+
+  function tekanSlotSolo(i) {
+    if (!sesi || !P.tekanSlot(sesi, i)) return;
+    suara.pilih();
+    gambarSolo();
+  }
+
+  function formatWaktu(detik) {
+    return `${Math.floor(detik / 60)}:${String(detik % 60).padStart(2, '0')}`;
+  }
+
+  function kunciSolo() {
+    if (!sesi) return;
+    const r = P.kunci(sesi);
+    if (!r) return;
+    if (!r.benar) {
+      suara.salah();
+      gambarSolo();
+      return;
+    }
+    const detik = Math.round((performance.now() - mulaiLevelMs) / 1000);
+    catatUji({ level: levelAktif.level, detik, kunciSalah: sesi.kunciSalah, waktu: new Date().toISOString() });
+    suara.benar();
+    gambarSolo();
+    const { kunciSalah } = sesi;
+    jedaMenangSolo = setTimeout(() => tampilkanHasilLevel(detik, kunciSalah), JEDA_MENANG_SOLO_MS);
+  }
+
+  function tampilkanHasilLevel(detik, kunciSalah) {
+    $('judul-hasil').textContent = `Level ${levelAktif.level} selesai!`;
+    $('detail-hasil').textContent = `Waktu ${formatWaktu(detik)}, kunci salah ${kunciSalah} kali`;
+    const adaLanjut = levelAktif.level < LEVEL.length;
+    $('tombol-level-lanjut').hidden = !adaLanjut;
+    $('layar-hasil').hidden = false;
+    $(adaLanjut ? 'tombol-level-lanjut' : 'tombol-level-peta').focus();
+  }
+
+  /* Kontrol */
+  // pointerdown lebih cepat dari click, jadi rebutan terasa adil di layar sentuh.
+  tombolRebut.forEach((tombol, i) => {
+    tombol.addEventListener('pointerdown', (e) => { e.preventDefault(); tekan(i); });
+    tombol.addEventListener('click', (e) => { if (e.detail === 0) tekan(i); });
+  });
+  tombolTukar.forEach((tombol, i) => tombol.addEventListener('click', () => tukar(i)));
+  document.addEventListener('keydown', (e) => {
+    if (!$('dialog-keluar').hidden) {
+      if (e.key === 'Escape') tutupDialogKeluar();
+      return;
+    }
+    if (e.repeat || $('layar-main').hidden) return;
+    const k = e.key.toLowerCase();
+    if (k === 'a') tekan(0);
+    if (k === 'l') tekan(1);
+  });
+  document.addEventListener('contextmenu', (e) => {
+    if (e.target.closest('#layar-main, #layar-solo')) e.preventDefault();
+  });
+
+  $('tombol-solo').addEventListener('click', kePeta);
+  $('tombol-peta-keluar').addEventListener('click', () => tampilkan('menu'));
+  $('tombol-solo-keluar').addEventListener('click', kePeta);
+  $('tombol-kosongkan').addEventListener('click', () => {
+    if (sesi && P.kosongkan(sesi)) gambarSolo();
+  });
+  $('tombol-kunci').addEventListener('click', kunciSolo);
+  $('tombol-level-lanjut').addEventListener('click', () => mulaiLevel(levelAktif.level + 1));
+  $('tombol-level-ulang').addEventListener('click', () => mulaiLevel(levelAktif.level));
+  $('tombol-level-peta').addEventListener('click', kePeta);
+  $('tombol-salin-uji').addEventListener('click', salinUji);
+  $('tombol-hapus-uji').addEventListener('click', hapusUji);
+  $('tombol-mulai').addEventListener('click', mulai);
+  $('tombol-ulang').addEventListener('click', mulai);
+  $('tombol-menu').addEventListener('click', keMenu);
+  $('tombol-keluar').addEventListener('click', bukaDialogKeluar);
+  $('tombol-lanjut-main').addEventListener('click', tutupDialogKeluar);
+  $('tombol-yakin-keluar').addEventListener('click', keMenu);
+  $('tombol-cara').addEventListener('click', () => tampilkan('cara'));
+  $('tombol-tutup-cara').addEventListener('click', () => tampilkan('menu'));
+  document.querySelectorAll('.tombol-suara').forEach((b) => b.addEventListener('click', () => {
+    bisu = !bisu;
+    try { localStorage.setItem('setdoku-bisu', bisu ? '1' : '0'); } catch (e) {}
+    gambarIkonSuara();
+  }));
+
+  /* Persiapan */
+  $('pola').innerHTML = WARNA.map((w, i) =>
+    `<pattern id="titik-${i}" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.6" fill="${w.hex}"/></pattern>`
+  ).join('');
+
+  const kartu = (bentuk, warna, jumlah, isian) => ({ bentuk, warna, jumlah, isian });
+  const isiDeret = (id, daftar) => { $(id).innerHTML = daftar.map(svgKartu).join(''); };
+  isiDeret('logo', [kartu(0, 0, 0, 0), kartu(1, 1, 1, 1), kartu(2, 2, 2, 2)]);
+  isiDeret('contoh-1', [kartu(1, 1, 0, 2), kartu(1, 1, 1, 2), kartu(1, 1, 2, 2)]);
+  isiDeret('contoh-2', [kartu(0, 0, 0, 0), kartu(1, 1, 1, 1), kartu(2, 2, 2, 2)]);
+  isiDeret('contoh-3', [kartu(2, 0, 0, 1), kartu(2, 0, 1, 1), kartu(2, 2, 2, 1)]);
+  gambarIkonSuara();
+  timerIsi.style.transform = 'scaleX(0)';
+})();
+</script>
+</body>
+</html>

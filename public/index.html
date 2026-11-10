@@ -1,0 +1,3647 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0e24">
+<title>SETDOKU</title>
+<meta name="description" content="Puzzle dan duel tiga kartu. Susun papan sampai setiap baris dan kolom membentuk rasi, atau berebut menemukan rasi berdua.">
+<script>
+  // Browser menolak manifest saat halaman dibuka langsung sebagai file, jadi hanya dipasang di alamat web.
+  if (location.protocol.startsWith('http')) {
+    const l = document.createElement('link');
+    l.rel = 'manifest';
+    l.href = 'manifest.webmanifest';
+    document.head.appendChild(l);
+  }
+</script>
+<link rel="icon" href="ikon/ikon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="ikon/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SETDOKU">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:type" content="website">
+<meta property="og:title" content="SETDOKU">
+<meta property="og:description" content="Puzzle dan duel tiga kartu">
+<meta property="og:image" content="https://setdoku.vercel.app/ikon/pratinjau.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+:root {
+  --malam: #0b0e24;
+  --malam-2: #151a3a;
+  --kartu: #1d2350;
+  --garis: #39417f;
+  --teks: #eef0ff;
+  --redup: #a9afd8;
+  --p1: #a594ff;
+  --p2: #3fe0b5;
+  --benar: #5ee08a;
+  --salah: #ff6b7d;
+  --celah: 8px;
+  --aman-atas: env(safe-area-inset-top, 0px);
+  --aman-bawah: env(safe-area-inset-bottom, 0px);
+  --aman-kiri: env(safe-area-inset-left, 0px);
+  --aman-kanan: env(safe-area-inset-right, 0px);
+  --lebar-layar: calc(100vw - var(--aman-kiri) - var(--aman-kanan));
+  --tinggi: calc(100vh - var(--aman-atas) - var(--aman-bawah));
+  --panel: 118px;
+  --sisi: clamp(130px, 19vw, 230px);
+  --lebar-kartu: min(
+    calc((var(--lebar-layar) - 32px - 3 * var(--celah)) / 4),
+    calc((var(--tinggi) - 2 * var(--panel) - 76px) / 3 / 1.4),
+    150px
+  );
+  /* Diganti kurva pegas sungguhan oleh skrip kalau browser mendukung linear(). */
+  --kurva-pegas: cubic-bezier(.34, 1.56, .64, 1);
+  --lama-pegas: 340ms;
+  --radius-kartu: 11% / 7.9%;
+  --bayang-kartu: 0 2px 5px #0006, 0 6px 14px #0004;
+  --bayang-angkat: 0 20px 36px #000a, 0 8px 14px #0007;
+  --ceruk: inset 0 3px 10px #0008, inset 0 0 0 2px #4d569f;
+}
+@supports (height: 100dvh) { :root { --tinggi: calc(100dvh - var(--aman-atas) - var(--aman-bawah)); } }
+@media (orientation: landscape) {
+  :root {
+    --lebar-kartu: min(
+      calc((var(--lebar-layar) - 2 * var(--sisi) - 64px - 3 * var(--celah)) / 4),
+      calc((var(--tinggi) - 76px) / 3 / 1.4),
+      150px
+    );
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  background-color: var(--malam);
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 18%, #fff9, transparent),
+    radial-gradient(1px 1px at 28% 72%, #fff8, transparent),
+    radial-gradient(1.5px 1.5px at 47% 33%, #fff7, transparent),
+    radial-gradient(1px 1px at 63% 86%, #fff8, transparent),
+    radial-gradient(1.5px 1.5px at 78% 12%, #fff9, transparent),
+    radial-gradient(1px 1px at 91% 58%, #fff8, transparent),
+    radial-gradient(70% 55% at 50% 50%, #232a6355, transparent);
+  color: var(--teks);
+  font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+button { font: inherit; color: inherit; touch-action: manipulation; }
+:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+/* Semua layar bertumpuk, supaya layar lama dan baru bisa bergerak bersamaan. */
+.layar { position: fixed; top: var(--aman-atas); left: var(--aman-kiri); z-index: 1; height: var(--tinggi); width: var(--lebar-layar); }
+/* Elemen yang sedang pergi tidak boleh menghalangi sentuhan ke layar baru. */
+.pergi { pointer-events: none !important; }
+
+/* Sistem tombol: turun seketika saat ditekan, memantul saat dilepas. */
+:where(.tombol-menu, .tombol-rebut, .tombol-tukar, .tombol-level, .tombol-beli, .tombol-item, .aksi-uji button) {
+  --dalam: 3px;
+  --sisi-tombol: #070a1d;
+  box-shadow: 0 var(--dalam) 0 var(--sisi-tombol);
+  transition:
+    transform var(--lama-pegas) var(--kurva-pegas),
+    box-shadow var(--lama-pegas) var(--kurva-pegas),
+    background-color .15s, color .15s, border-color .15s, opacity .15s, filter .15s;
+}
+:where(.tombol-menu, .tombol-rebut, .tombol-tukar, .tombol-level, .tombol-beli, .tombol-item, .aksi-uji button):where(.ditekan, :active):not(:disabled, [aria-disabled="true"]) {
+  transform: translateY(calc(var(--dalam) - 1px));
+  box-shadow: 0 1px 0 var(--sisi-tombol);
+  transition-duration: 50ms;
+  transition-timing-function: ease-out;
+}
+:where(.tombol-menu, .tombol-rebut, .tombol-tukar, .tombol-level, .tombol-beli, .tombol-item):disabled { box-shadow: none; opacity: .38; cursor: default; }
+:where(.tombol-beli, .tombol-item)[aria-disabled="true"] { box-shadow: none; opacity: .45; cursor: default; }
+@media (hover: hover) {
+  :where(.tombol-menu, .tombol-level, .aksi-uji button):hover:not(.ditekan, :active, :disabled, [aria-disabled="true"]) {
+    filter: brightness(1.12);
+    transform: translateY(-1px);
+  }
+  .ikon:hover:not(.ditekan, :active) { filter: brightness(1.25); }
+}
+
+/* Menu */
+#layar-menu {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 24px 16px; text-align: center;
+}
+.logo { display: flex; gap: 10px; margin-bottom: 4px; }
+.logo svg { width: 62px; height: 87px; filter: drop-shadow(0 8px 12px #0007); cursor: pointer; }
+h1 { font-size: clamp(42px, 11vw, 68px); line-height: 1.02; margin: 6px 0 0; font-weight: 800; letter-spacing: -.02em; }
+.slogan { color: var(--redup); margin: 0 0 18px; font-size: 17px; }
+.tombol-menu {
+  --dalam: 5px;
+  width: min(280px, 100%); padding: 15px 20px; border-radius: 14px; cursor: pointer;
+  border: 2px solid var(--garis); background: var(--malam-2); font-size: 18px; font-weight: 700;
+}
+.tombol-menu.utama {
+  --sisi-tombol: color-mix(in srgb, var(--p1) 50%, #000);
+  background: var(--p1); border-color: var(--p1); color: #14123a;
+}
+
+/* Cara bermain */
+#layar-cara { overflow-y: auto; padding: 24px 16px 32px; user-select: text; -webkit-user-select: text; }
+.isi-cara { max-width: 560px; margin: 0 auto; }
+h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01em; }
+.isi-cara p, .isi-cara li { line-height: 1.5; color: #d6d9f3; }
+.isi-cara ul { padding-left: 20px; margin: 8px 0; }
+.contoh { background: var(--malam-2); border: 1px solid var(--garis); border-radius: 14px; padding: 14px; margin: 14px 0; }
+.contoh h3 { margin: 0 0 10px; font-size: 16px; }
+.contoh .tanda-benar { color: var(--benar); }
+.contoh .tanda-salah { color: var(--salah); }
+.deret { display: flex; gap: 8px; margin-bottom: 10px; }
+.deret svg { width: min(92px, 28vw); height: auto; }
+.contoh p { margin: 0; font-size: 15px; }
+.isi-cara .tombol-menu { display: block; margin: 20px auto 0; user-select: none; -webkit-user-select: none; }
+
+/* Permainan */
+#layar-main {
+  display: grid;
+  grid-template-rows: var(--panel) minmax(0, 1fr) var(--panel);
+  grid-template-areas: "dua" "tengah" "satu";
+}
+.pemain {
+  position: relative;
+  display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  padding: 8px 16px; min-width: 0; --warna: var(--p1);
+}
+.pemain > * { position: relative; }
+/* Cahaya pemain yang sedang memilih. */
+.pemain::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s;
+  background: radial-gradient(75% 130% at 50% 100%, color-mix(in srgb, var(--warna) 34%, transparent), transparent);
+}
+.pemain.aktif::before { opacity: 1; }
+.pemain.p1 { grid-area: satu; }
+.pemain.p2 { grid-area: dua; --warna: var(--p2); transform: rotate(180deg); }
+.baris-skor { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 8px; min-height: 22px; }
+.nama { font-weight: 700; color: var(--warna); font-size: 14px; white-space: nowrap; }
+.bintang-skor { display: flex; gap: 3px; }
+.bintang-skor svg { width: 17px; height: 17px; fill: none; stroke: var(--warna); stroke-width: 2; overflow: visible; }
+.bintang-skor svg.isi { fill: var(--warna); }
+.aksi { display: flex; gap: 8px; }
+.aksi .tombol-rebut { flex: 1; min-width: 0; }
+.tombol-tukar {
+  --sisi-tombol: color-mix(in srgb, var(--warna) 45%, #000);
+  flex: none; width: 72px; border-radius: 13px; cursor: pointer; padding: 0 4px;
+  border: 2px solid var(--warna); background: transparent; color: var(--warna);
+  font-size: 13px; font-weight: 800; line-height: 1.1;
+}
+.tombol-tukar[aria-pressed="true"] {
+  background: var(--warna); color: #10122f;
+  transform: translateY(2px); box-shadow: 0 1px 0 var(--sisi-tombol);
+}
+.tombol-rebut {
+  --dalam: 4px;
+  --sisi-tombol: color-mix(in srgb, var(--warna) 60%, #000);
+  height: 50px; border: 0; border-radius: 13px; cursor: pointer; position: relative; overflow: hidden;
+  background: var(--warna); color: #10122f; font-size: 22px; font-weight: 800; letter-spacing: 1px;
+}
+.tombol-rebut .label { display: inline-block; }
+.tombol-rebut.jalan { opacity: 1; font-size: 26px; font-variant-numeric: tabular-nums; }
+.riak {
+  position: absolute; left: 50%; top: 50%; width: 110%; aspect-ratio: 1; border-radius: 50%;
+  background: #ffffff8c; translate: -50% -50%; scale: 0; pointer-events: none;
+  animation: riak .5s ease-out forwards;
+}
+@keyframes riak { to { scale: 1.2; opacity: 0; } }
+.kunci {
+  display: none; position: absolute; right: 4px; top: 4px;
+  font-size: 10px; line-height: 13px; font-weight: 700; padding: 0 4px; border-radius: 4px; background: #0003; letter-spacing: 0;
+}
+@media (hover: hover) { .kunci { display: block; } }
+.pesan { margin: 0; min-height: 18px; font-size: 14px; color: var(--redup); text-align: center; line-height: 18px; }
+
+.tengah {
+  grid-area: tengah; min-height: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px; padding: 0 16px;
+}
+.bar-atas { display: flex; align-items: center; gap: 8px; width: calc(var(--lebar-kartu) * 4 + 3 * var(--celah)); }
+.ikon {
+  flex: none; width: 32px; height: 32px; padding: 0; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--garis); background: var(--malam-2);
+  display: grid; place-items: center;
+  box-shadow: 0 2px 0 #070a1d;
+  transition: transform var(--lama-pegas) var(--kurva-pegas), box-shadow var(--lama-pegas) var(--kurva-pegas), filter .15s;
+}
+.ikon.ditekan, .ikon:active { transform: scale(.9); box-shadow: 0 0 0 #070a1d; transition-duration: 50ms; transition-timing-function: ease-out; }
+.ikon svg { width: 17px; height: 17px; fill: none; stroke: var(--teks); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.timer { flex: 1; height: 8px; border-radius: 4px; background: var(--malam-2); overflow: hidden; }
+.timer i { display: block; height: 100%; width: 100%; background: var(--warna-timer, transparent); transform-origin: left; }
+.timer.gawat i { background: var(--salah); }
+.timer.gawat { animation: denyut-timer .25s ease-in-out infinite alternate; }
+@keyframes denyut-timer { to { transform: scaleY(1.7); } }
+
+#meja { display: grid; grid-template-columns: repeat(4, var(--lebar-kartu)); gap: var(--celah); }
+.kartu {
+  width: var(--lebar-kartu); aspect-ratio: 100 / 140; padding: 0; border: 0; background: none;
+  border-radius: var(--radius-kartu); cursor: pointer; display: block;
+  box-shadow: var(--bayang-kartu);
+  transition: box-shadow .18s, transform var(--lama-pegas) var(--kurva-pegas);
+}
+.kartu:disabled, .kartu[aria-disabled="true"] { cursor: default; }
+/* Kartu diketuk sebelum RASI! ditekan: tombol kedua pemain mengajak ditekan. */
+.tombol-rebut.ajak { animation: ajak .6s ease-out; }
+@keyframes ajak {
+  from { box-shadow: 0 var(--dalam) 0 var(--sisi-tombol), 0 0 0 0 color-mix(in srgb, var(--warna) 75%, transparent); }
+  to { box-shadow: 0 var(--dalam) 0 var(--sisi-tombol), 0 0 0 16px transparent; }
+}
+.kartu.ditekan:not(:disabled), .kartu:active:not(:disabled) { transform: scale(.95); transition-duration: 50ms; transition-timing-function: ease-out; }
+.kartu.menunggu { visibility: hidden; }
+.kartu svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.kartu.dipilih { box-shadow: var(--bayang-angkat), 0 0 20px color-mix(in srgb, var(--warna-timer, #fff) 60%, transparent); }
+/* Warna kartu mengikuti Card Skin. Warna simbol tidak pernah berubah. */
+.tepi { fill: var(--latar-kartu, #1d2350); stroke: var(--tepi-kartu, #39417f); }
+.ikon-toko svg { display: block; width: 28px; height: auto; margin: auto; }
+.kartu.dipilih .tepi { stroke: var(--warna-timer, #fff); stroke-width: 5; }
+.kartu.benar .tepi { stroke: var(--benar); stroke-width: 6; }
+.kartu.salah .tepi { stroke: var(--salah); stroke-width: 6; }
+/* G-05: rasi yang terlewat. Garis putus-putus membedakannya dari kartu benar tanpa mengandalkan warna. */
+.kartu.terlewat .tepi { stroke: var(--benar); stroke-width: 6; stroke-dasharray: 11 7; }
+/* G-07: petunjuk tombol keyboard, hanya di perangkat dengan mouse. */
+.kartu, .sedia { position: relative; }
+@media (hover: hover) and (pointer: fine) {
+  #layar-main.memilih .kartu::after, .sedia::after, .slot:not(.tetap)::after {
+    content: attr(data-kunci); position: absolute; left: 4px; top: 4px; pointer-events: none;
+    min-width: 16px; padding: 0 3px; border-radius: 5px; background: #0009; color: var(--teks);
+    font-size: 11px; font-weight: 700; line-height: 16px; text-align: center;
+  }
+}
+
+@media (orientation: landscape) {
+  #layar-main {
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: var(--sisi) minmax(0, 1fr) var(--sisi);
+    grid-template-areas: "satu tengah dua";
+  }
+  .pemain.p2 { transform: none; }
+  .tombol-rebut { height: 72px; }
+  .pesan { min-height: 40px; }
+}
+
+/* Overlay kaca */
+#layar-menang, #layar-hasil, #dialog-keluar, #dialog-mode {
+  position: fixed; inset: 0; z-index: 5;
+  background: #070a1d8c;
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+#dialog-keluar { z-index: 10; background: #070a1db0; }
+/* Blur layar penuh mahal. Saat overlay menutup, blur dilepas supaya gerakannya tetap mulus. */
+#layar-menang.pergi, #layar-hasil.pergi, #dialog-keluar.pergi, #dialog-mode.pergi { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.kotak-kaca, .kotak-dialog {
+  background: #1a2048d9;
+  border: 1px solid #ffffff24;
+  box-shadow: 0 30px 60px #0009, inset 0 1px 0 #ffffff2e;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  max-height: calc(var(--tinggi) - 32px); overflow-y: auto;
+}
+.kotak-kaca { width: min(360px, 100%); gap: 12px; padding: 26px 20px 30px; border-radius: 24px; }
+.kotak-dialog { width: min(340px, 100%); gap: 12px; padding: 22px 18px 26px; border-radius: 20px; }
+.kotak-dialog h2 { font-size: 22px; margin: 0; }
+.kotak-dialog p { margin: 0 0 6px; color: var(--redup); line-height: 1.4; }
+
+/* Pemenang */
+#judul-menang { font-size: clamp(32px, 9vw, 46px); line-height: 1.05; margin: 0; font-weight: 800; letter-spacing: -.02em; }
+#skor-akhir { color: var(--redup); font-size: 20px; margin: 0 0 12px; font-variant-numeric: tabular-nums; }
+
+/* Daftar level */
+#layar-peta { overflow-y: auto; padding: 16px 16px 32px; }
+.isi-peta { max-width: 420px; margin: 0 auto; }
+.bar-peta { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.bar-peta h2 { font-size: 20px; margin: 0; }
+.keterangan { color: var(--redup); margin: 0 0 14px; font-size: 15px; line-height: 1.4; }
+.keterangan.peringatan { color: var(--salah); }
+
+/* Pilih Mode */
+.tombol-mode { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 11px 16px; }
+.tombol-mode small { font-size: 13px; font-weight: 600; opacity: .85; font-variant-numeric: tabular-nums; }
+#info-mode { font-variant-numeric: tabular-nums; }
+#alasan-mode { margin: 0; color: var(--salah); font-size: 14px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.grid-level { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+
+/* Karusel chapter: geser bawaan browser, berhenti tepat di setiap chapter. */
+.pager-chapter { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
+.pager-chapter .ikon:disabled { opacity: .3; box-shadow: none; cursor: default; }
+.titik-chapter { display: flex; gap: 8px; }
+.titik {
+  min-width: 38px; height: 32px; padding: 0 12px; border-radius: 999px;
+  border: 1px solid var(--garis); background: var(--malam-2); color: var(--redup);
+  font: inherit; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: min-width .4s cubic-bezier(.3, 1.35, .5, 1), background-color .2s, border-color .2s, color .2s;
+}
+.titik[aria-selected="true"] { min-width: 68px; background: var(--aksen); border-color: var(--aksen); color: var(--malam); }
+.titik.terkunci:not([aria-selected="true"]) { opacity: .55; }
+.karusel-chapter {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 100%; gap: 24px;
+  overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
+  scrollbar-width: none; margin: 0 -16px; padding: 4px 16px 8px; scroll-padding-inline: 16px;
+}
+.karusel-chapter::-webkit-scrollbar { display: none; }
+.halaman-chapter { scroll-snap-align: start; scroll-snap-stop: always; min-width: 0; }
+.kepala-chapter { margin: 0 0 12px; padding: 12px 14px; background: var(--malam-2); border: 1px solid var(--garis); border-top: 3px solid var(--aksen); border-radius: 16px; }
+.judul-chapter { margin: 0 0 2px; font-size: 17px; font-weight: 800; line-height: 1.25; }
+.aturan-chapter { margin: 0 0 10px; color: var(--redup); font-size: 13px; line-height: 1.35; font-variant-numeric: tabular-nums; }
+.aturan-chapter.terkunci { color: var(--salah); }
+.meter-chapter { height: 6px; border-radius: 999px; background: #0a0d26; overflow: hidden; }
+.meter-chapter span { display: block; height: 100%; min-width: 0; background: var(--aksen); border-radius: inherit; }
+.angka-chapter { display: block; margin-top: 6px; color: var(--redup); font-size: 12px; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .titik { transition: none; } }
+.tombol-level {
+  aspect-ratio: 1; padding: 0; border-radius: 12px; cursor: pointer; position: relative;
+  border: 2px solid var(--garis); background: var(--malam-2); font-size: 20px; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.tombol-level { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; line-height: 1.1; }
+.tombol-level .nomor, .tombol-level .bawah { display: block; }
+.tombol-level .bawah { font-size: 10px; line-height: 1; letter-spacing: -1px; }
+.tombol-level .bawah svg { display: block; width: 13px; height: 13px; fill: currentColor; }
+.tombol-level.selesai { --sisi-tombol: color-mix(in srgb, var(--benar) 35%, #000); border-color: var(--benar); color: var(--benar); }
+.tombol-level.selesai::after { content: "\2713"; position: absolute; top: 2px; right: 6px; font-size: 12px; }
+.tombol-level.punya-stars::after { content: none; }
+.tombol-level.terkunci { cursor: default; box-shadow: none; color: var(--redup); background: #0a0d2680; border-color: #39417f80; }
+.tombol-level.terkunci .nomor { opacity: .6; }
+.tombol-level.baru-selesai::after, .tombol-level.baru-selesai .bawah, .tombol-level.baru-terbuka .nomor { animation: pop .55s cubic-bezier(.3, 1.8, .6, 1); }
+
+/* Status di peta level */
+.status-peta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 12px; }
+.stat {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; padding: 7px 4px;
+  background: var(--malam-2); border: 1px solid var(--garis); border-radius: 12px;
+  font-variant-numeric: tabular-nums; text-align: center;
+}
+.stat b { font-size: 18px; line-height: 1.2; white-space: nowrap; }
+.stat small { font-size: 11px; line-height: 1.25; color: var(--redup); white-space: nowrap; }
+@keyframes pop { from { scale: 0; } }
+#uji-main { margin-top: 22px; color: var(--redup); font-size: 14px; }
+#uji-main summary { cursor: pointer; }
+.aksi-uji { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.aksi-uji button {
+  padding: 9px 12px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 700;
+  border: 1px solid var(--garis); background: var(--malam-2);
+}
+#teks-uji {
+  display: block; width: 100%; height: 130px; margin-top: 10px; padding: 8px; border-radius: 8px;
+  border: 1px solid var(--garis); background: var(--malam-2); color: var(--teks);
+  font: 12px/1.4 ui-monospace, Consolas, monospace; user-select: text; -webkit-user-select: text;
+}
+
+/* Papan Solo */
+#layar-solo {
+  --pool-baris: 1;
+  --celah-sedia: 6px;
+  --lebar-sedia: min(calc((var(--lebar-layar) - 32px - 5 * var(--celah-sedia)) / 6), 64px);
+  --lebar-slot: min(
+    calc((var(--lebar-layar) - 32px - 2 * var(--celah)) / 3),
+    calc((var(--tinggi) - 190px - var(--pool-baris) * (var(--lebar-sedia) * 1.4 + var(--celah-sedia)) - 2 * var(--celah)) / 3 / 1.4),
+    120px
+  );
+  display: flex; flex-direction: column; gap: 8px; padding: 8px 16px;
+}
+.bar-solo { display: flex; align-items: center; gap: 8px; flex: none; }
+/* Judul dan timer berbagi tinggi tombol ikon, supaya papan tidak mengecil saat Tantangan. */
+.info-solo { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+#judul-level { font-weight: 800; font-size: 17px; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#layar-solo.ranked #judul-level { font-size: 15px; line-height: 18px; }
+#judul-level.gawat { color: var(--salah); }
+#timer-solo { flex: none; height: 6px; border-radius: 3px; }
+#timer-solo i { background: var(--p1); }
+#timer-solo.hampir i { background: #fae242; }
+#timer-solo.gawat i { background: var(--salah); }
+/* Teks melayang di bagian atas. Masuk dan keluar memakai pegas (gerak.js), sedangkan
+   .toast-isi naik sangat pelan selama tampil, jadi gerakannya tidak pernah berhenti mendadak. */
+#lapisan-toast { position: fixed; left: 0; right: 0; top: 0; height: 0; z-index: 9; pointer-events: none; }
+.toast {
+  position: absolute; left: 0; right: 0; margin-inline: auto;
+  width: fit-content; max-width: calc(100vw - 32px);
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+}
+/* Di papan Solo, pesan berada tepat di bawah timer, supaya sisa waktu tetap terbaca. */
+.toast.di-solo { top: calc(env(safe-area-inset-top, 0px) + 44px); }
+/* Di Toko, saldo di baris judul harus tetap terlihat setelah membeli. */
+.toast.di-toko { top: calc(env(safe-area-inset-top, 0px) + 52px); }
+.toast.perayaan { color: #fae242; }
+.toast.penalti, .toast.peringatan { color: var(--salah); }
+.toast.info { color: #68dcf3; }
+.toast-isi {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 7px 16px;
+  text-align: center; text-wrap: balance;
+  background: #1a2048; border: 1px solid currentColor; border-radius: 18px;
+  box-shadow: 0 8px 20px #0008;
+  animation: toast-naik var(--lama-toast, 3s) linear forwards;
+}
+.toast-teks { font-size: 15px; font-weight: 800; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.toast.perayaan .toast-teks { font-size: 17px; letter-spacing: -.01em; }
+.toast-sub { font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--teks); }
+@keyframes toast-naik { to { translate: 0 -6px; } }
+.area-solo {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+}
+.sisi-solo { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+#papan { position: relative; display: grid; grid-template-columns: repeat(3, var(--lebar-slot)); gap: var(--celah); flex: none; }
+.slot, .sedia {
+  padding: 0; border: 0; background: none; border-radius: var(--radius-kartu); display: block;
+  aspect-ratio: 100 / 140; touch-action: none;
+  box-shadow: var(--bayang-kartu);
+}
+.slot {
+  width: var(--lebar-slot); cursor: pointer; position: relative;
+  transition: box-shadow .18s, background-color .18s, transform var(--lama-pegas) var(--kurva-pegas);
+}
+.slot svg, .sedia svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.slot.terisi { cursor: grab; }
+.slot.tetap { cursor: default; }
+.slot.tetap .tepi { fill: var(--latar-tetap, #22275b); stroke: var(--tepi-tetap, #7a84d6); }
+.slot.ditekan:not(.kosong, :disabled) { transform: scale(.96); transition-duration: 50ms; transition-timing-function: ease-out; }
+/* Slot kosong adalah ceruk. Kartu yang sedang terbang menuju slot juga belum menutupinya. */
+.slot.kosong, .slot.menunggu, .slot.asal { background: #151a3acc; box-shadow: var(--ceruk); }
+.slot.menunggu > svg { visibility: hidden; }
+.slot.asal > svg { opacity: .25; }
+.slot.siap { background: #a594ff1f; box-shadow: inset 0 2px 8px #0009, inset 0 0 0 2px var(--p1); }
+.slot.tujuan { background: #a594ff33; box-shadow: inset 0 0 0 2.5px #ffffffb0, 0 0 24px #a594ff99; }
+.slot.tujuan:not(.kosong) > svg:not(.samar) { opacity: .5; }
+.slot .samar { position: absolute; inset: 0; opacity: .32; pointer-events: none; }
+.slot.gagal .tepi { stroke: var(--salah); stroke-width: 6; }
+.slot.benar .tepi { stroke: var(--benar); stroke-width: 6; }
+.slot.kedip { animation: kedip .55s ease-out; }
+@keyframes kedip { 30% { background: #ff6b7d55; box-shadow: inset 0 0 0 2.5px var(--salah); } }
+.slot .gembok {
+  position: absolute; left: 50%; top: 50%; width: 42%; height: auto; translate: -50% -50%;
+  fill: #eef0ff; pointer-events: none; filter: drop-shadow(0 2px 5px #000d);
+  animation: gembok .7s ease-out forwards;
+}
+@keyframes gembok {
+  0% { opacity: 0; scale: .6; }
+  25% { opacity: 1; scale: 1.12; }
+  70% { opacity: 1; scale: 1; }
+  100% { opacity: 0; scale: 1; }
+}
+.garis-sorot {
+  position: absolute; z-index: 2; border-radius: 99px; pointer-events: none;
+  background: var(--warna-garis); box-shadow: 0 0 14px var(--warna-garis);
+}
+#pesan-solo {
+  margin: 0; min-height: 40px; max-width: 460px; font-size: 14px; line-height: 20px;
+  color: var(--redup); text-align: center;
+}
+#pesan-solo.salah { color: var(--salah); }
+#kartu-sedia {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: var(--celah-sedia);
+  max-width: calc(6 * var(--lebar-sedia) + 5 * var(--celah-sedia));
+}
+.sedia {
+  width: var(--lebar-sedia); cursor: grab;
+  transition: opacity .15s, box-shadow .18s, transform var(--lama-pegas) var(--kurva-pegas);
+}
+.sedia.ditekan { transform: scale(.94); transition-duration: 50ms; transition-timing-function: ease-out; }
+.sedia.dipilih { transform: translateY(-8px) scale(1.06); box-shadow: var(--bayang-angkat), 0 0 16px #ffffff66; }
+.sedia.dipilih .tepi { stroke: #fff; stroke-width: 6; }
+.sedia.asal { opacity: .25; box-shadow: none; }
+.sedia.terpakai, .sedia.menunggu { visibility: hidden; }
+.sedia.tertutup { cursor: default; }
+.belakang-kartu { fill: var(--tepi-tetap, #7a84d6); font-size: 56px; font-weight: 800; text-anchor: middle; dominant-baseline: central; }
+/* Tombol item berbagi baris dengan Kunci jawaban, supaya papan tidak mengecil. */
+.baris-kunci { display: flex; align-items: stretch; justify-content: center; gap: 8px; width: 100%; max-width: 400px; }
+#tombol-kunci { padding: 11px 12px; flex: 1 1 auto; width: auto; min-width: 0; max-width: 280px; }
+.tombol-item {
+  --dalam: 4px;
+  position: relative; flex: none; width: 48px; padding: 0; border-radius: 14px; cursor: pointer;
+  border: 2px solid var(--garis); background: var(--malam-2); font-size: 20px; line-height: 1;
+}
+.tombol-item small {
+  position: absolute; top: -6px; right: -6px; min-width: 19px; padding: 2px 4px; border-radius: 10px;
+  background: var(--p1); color: #14123a; font-size: 11px; font-weight: 800; line-height: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Toko */
+#layar-toko, #layar-profil { overflow-y: auto; padding: 16px 16px 32px; }
+#isi-profil .stat small { white-space: normal; }
+.isi-toko { max-width: 520px; margin: 0 auto; }
+.bar-toko { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.bar-toko h2 { flex: 1; font-size: 20px; margin: 0; }
+.saldo-toko { display: flex; gap: 12px; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.saldo-toko span { display: inline-block; }
+#daftar-toko { display: flex; flex-direction: column; gap: 10px; }
+.kartu-toko {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 12px;
+  background: var(--malam-2); border: 1px solid var(--garis); border-radius: 14px;
+}
+.ikon-toko { font-size: 26px; line-height: 1; text-align: center; }
+.teks-toko { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.teks-toko b { font-size: 16px; }
+.teks-toko small { font-size: 13px; line-height: 1.3; color: var(--redup); }
+.teks-toko .punya { color: var(--teks); font-weight: 600; font-variant-numeric: tabular-nums; }
+.aksi-toko { display: flex; flex-direction: column; gap: 8px; }
+.tombol-beli {
+  --dalam: 3px;
+  --sisi-tombol: color-mix(in srgb, var(--p1) 50%, #000);
+  min-width: 68px; padding: 8px 10px; border: 0; border-radius: 11px; cursor: pointer;
+  background: var(--p1); color: #14123a; font-size: 14px; font-weight: 800; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.tombol-beli.sekunder { --sisi-tombol: #070a1d; background: var(--malam); color: var(--teks); border: 1px solid var(--garis); }
+.tombol-beli.yakin { --sisi-tombol: color-mix(in srgb, var(--salah) 50%, #000); background: var(--salah); }
+#tombol-kunci[aria-disabled="true"] { cursor: default; opacity: .45; box-shadow: none; }
+#tombol-kunci.bangun { animation: bangun .75s ease-out; }
+@keyframes bangun {
+  from { box-shadow: 0 var(--dalam) 0 var(--sisi-tombol), 0 0 0 0 #a594ffc0; }
+  to { box-shadow: 0 var(--dalam) 0 var(--sisi-tombol), 0 0 0 24px #a594ff00; }
+}
+
+/* Lapisan kartu yang sedang diseret atau terbang */
+#lapisan-seret { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
+.hantu {
+  position: absolute; left: 0; top: 0; pointer-events: auto; touch-action: none; cursor: grab;
+  border-radius: var(--radius-kartu); box-shadow: var(--bayang-kartu);
+  transition: box-shadow .18s; will-change: translate, scale, rotate;
+}
+.hantu svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.hantu.diseret { box-shadow: var(--bayang-angkat); cursor: grabbing; }
+.hantu.poin { pointer-events: none; }
+.hantu.bintang { pointer-events: none; box-shadow: none; }
+#kanvas-efek { position: fixed; left: 0; top: 0; width: 100%; height: 100%; z-index: 8; pointer-events: none; }
+
+@media (orientation: landscape) {
+  #layar-solo {
+    --lebar-slot: min(calc((var(--tinggi) - 68px - 2 * var(--celah)) / 3 / 1.4), 120px);
+    --lebar-sedia: min(calc((var(--lebar-layar) - 3 * var(--lebar-slot) - 2 * var(--celah) - 56px - 5 * var(--celah-sedia)) / 6), 64px);
+  }
+  .area-solo { flex-direction: row; gap: 24px; }
+  .sisi-solo { flex: 1; min-width: 0; }
+}
+
+/* Hasil level */
+#judul-hasil { font-size: clamp(28px, 8vw, 40px); line-height: 1.05; margin: 0; font-weight: 800; letter-spacing: -.02em; color: var(--benar); }
+#judul-hasil.gagal { color: var(--salah); }
+#stars-hasil, #nyawa-hasil { display: flex; flex-wrap: wrap; justify-content: center; margin: 0; }
+#stars-hasil { gap: 6px; font-size: 38px; line-height: 1.15; }
+#nyawa-hasil { gap: 4px; font-size: 22px; line-height: 1.2; }
+.star-hasil, .nyawa-ikon { display: inline-block; }
+.star-hasil.kosong, .nyawa-ikon.kosong { filter: grayscale(1) brightness(.7); opacity: .3; }
+.nyawa-ikon { transition: filter .35s, opacity .35s; }
+#hadiah-hasil { margin: 0; font-size: 18px; font-weight: 800; color: #fae242; font-variant-numeric: tabular-nums; }
+#hadiah-hasil.tetap { font-size: 15px; font-weight: 600; color: var(--redup); }
+#detail-hasil { color: var(--redup); font-size: 16px; line-height: 1.35; margin: 0 0 6px; font-variant-numeric: tabular-nums; }
+#saran-hasil { color: var(--redup); font-size: 13px; line-height: 1.35; margin: -8px 0 6px; font-variant-numeric: tabular-nums; }
+
+/* Layar pendek: tombol menu berjajar supaya tidak perlu digulir. */
+@media (orientation: landscape) and (max-height: 480px) {
+  #layar-menu { flex-flow: row wrap; align-content: center; gap: 10px; }
+  #layar-menu .logo, #layar-menu h1, #layar-menu .slogan { flex: 0 0 100%; justify-content: center; }
+  #layar-menu .logo svg { width: 44px; height: 62px; }
+  #layar-menu .tombol-menu { flex: 1 1 0; max-width: 190px; padding: 13px 8px; font-size: 16px; }
+  .kotak-kaca, .kotak-dialog { padding: 14px 18px 18px; gap: 8px; }
+  .kotak-kaca .tombol-menu, .kotak-dialog .tombol-menu { padding: 9px 16px; font-size: 16px; }
+  #skor-akhir, #detail-hasil { margin-bottom: 2px; font-size: 14px; }
+  #stars-hasil { font-size: 24px; }
+  #nyawa-hasil { font-size: 16px; }
+  #hadiah-hasil { font-size: 15px; }
+  #saran-hasil { font-size: 12px; margin: -6px 0 2px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tombol-rebut.ajak, .timer.gawat, .slot.kedip, #tombol-kunci.bangun, .tombol-level.baru-selesai::after, .tombol-level.baru-selesai .bawah, .tombol-level.baru-terbuka .nomor { animation: none; }
+  .riak { display: none; }
+  .slot .gembok { animation: none; }
+  .toast-isi { animation: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  #layar-menang, #layar-hasil, #dialog-keluar, #dialog-mode { background: #070a1df2; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .kotak-kaca, .kotak-dialog { background: var(--malam-2); }
+}
+@media (prefers-contrast: more) {
+  .kotak-kaca, .kotak-dialog { background: var(--malam); border: 2px solid var(--teks); }
+  .tombol-menu, .tombol-level, .ikon { border-color: var(--teks); }
+  #lapisan-toast .toast { color: var(--teks); }
+  .toast-isi { background: var(--malam); border-width: 2px; }
+  .slot.kosong { box-shadow: inset 0 0 0 2px var(--teks); }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs id="pola"></defs></svg>
+
+<section id="layar-menu" class="layar">
+  <div class="logo" id="logo" aria-hidden="true"></div>
+  <h1>SETDOKU</h1>
+  <p class="slogan">Puzzle dan duel tiga kartu</p>
+  <button class="tombol-menu utama" id="tombol-solo">Main sendiri</button>
+  <button class="tombol-menu" id="tombol-mulai">Main berdua</button>
+  <button class="tombol-menu" id="tombol-toko">Toko</button>
+  <button class="tombol-menu" id="tombol-profil">Profil</button>
+  <button class="tombol-menu" id="tombol-cara">Cara bermain</button>
+</section>
+
+<section id="layar-cara" class="layar" hidden>
+  <div class="isi-cara">
+    <h2>Cara bermain</h2>
+    <p>Setiap kartu punya empat sifat:</p>
+    <ul>
+      <li><b>Bentuk:</b> bintang, bulan sabit, atau planet</li>
+      <li><b>Warna:</b> emas, biru es, atau koral</li>
+      <li><b>Jumlah:</b> satu, dua, atau tiga simbol</li>
+      <li><b>Isian:</b> penuh, garis tepi, atau bertitik</li>
+    </ul>
+    <p>Tiga kartu membentuk <b>rasi</b> kalau setiap sifatnya semua sama atau semua beda.</p>
+    <div class="contoh">
+      <h3 class="tanda-benar">Rasi: tiga sifat sama, satu beda</h3>
+      <div class="deret" id="contoh-1"></div>
+      <p>Bentuk, warna, dan isian sama. Jumlahnya semua beda.</p>
+    </div>
+    <div class="contoh">
+      <h3 class="tanda-benar">Rasi: semua sifat beda</h3>
+      <div class="deret" id="contoh-2"></div>
+      <p>Bentuk, warna, jumlah, dan isian semuanya berbeda.</p>
+    </div>
+    <div class="contoh">
+      <h3 class="tanda-salah">Bukan rasi</h3>
+      <div class="deret" id="contoh-3"></div>
+      <p>Warnanya emas, emas, koral. Dua sama dan satu beda tidak dihitung.</p>
+    </div>
+    <h3>Main sendiri</h3>
+    <p>Susun kartu di papan 3 × 3 sampai <b>setiap baris dan setiap kolom</b> membentuk rasi. Kartu yang sudah terpasang adalah petunjuk dan tidak bisa dipindah.</p>
+    <ul>
+      <li>Seret kartu tersedia ke slot. Bisa juga ketuk kartu, lalu ketuk slot.</li>
+      <li>Seret kartu di papan untuk memindahkan atau menukarnya.</li>
+      <li>Seret kartu keluar papan atau ketuk kartu itu untuk mengambilnya lagi.</li>
+      <li>Dua kartu dalam satu garis selalu punya tepat satu kartu ketiga.</li>
+      <li>Tidak semua kartu tersedia harus dipakai. Sebagian adalah pengecoh.</li>
+      <li>Di keyboard, tekan huruf atau angka yang tertera di kartu dan slot. <b>K</b> untuk kunci jawaban, <b>H</b> untuk Hint, dan <b>T</b> untuk Extra Time.</li>
+    </ul>
+    <h3>Practice dan Tantangan</h3>
+    <p>Setiap level punya dua mode dengan puzzle berbeda.</p>
+    <ul>
+      <li><b>Practice:</b> tanpa batas waktu dan tanpa nyawa. Kalau jawaban salah, garis yang salah ditunjukkan.</li>
+      <li><b>Tantangan:</b> ada timer dan butuh 1 nyawa. Menang membuka level berikutnya, memberi Stars, dan mengembalikan nyawa.</li>
+      <li>Kunci jawaban yang salah di Tantangan memotong 15 detik, tanpa menunjukkan letak kesalahannya.</li>
+      <li>Waktu habis, keluar, atau memuat ulang halaman berarti gagal, dan nyawanya hilang.</li>
+    </ul>
+    <h3>Stars ⭐ dan nyawa</h3>
+    <ul>
+      <li>1 ⭐ kalau selesai tepat waktu, 2 ⭐ dengan sisa waktu minimal 25%, dan 3 ⭐ dengan sisa waktu minimal 50%.</li>
+      <li>Mengulang level hanya menambah selisih dari rekor.</li>
+      <li>Nyawa pulih 1 setiap 20 menit. Practice tetap bisa dimainkan saat nyawa habis.</li>
+    </ul>
+    <h3>Chapter dan kartu tertutup</h3>
+    <ul>
+      <li><b>Chapter 2</b> dibuka dengan 75 ⭐ Total Stars. Kartunya punya 1 sampai 3 simbol, dan pengecohnya lebih meyakinkan.</li>
+      <li><b>Chapter 3</b> dibuka dengan 150 ⭐ Total Stars. Sebagian kartu tersedia tertutup, dan setiap rasi yang terbentuk di papan membuka satu kartu.</li>
+      <li>Isi kartu tertutup bisa dihitung sendiri, karena dua kartu dalam satu garis selalu punya tepat satu kartu ketiga.</li>
+    </ul>
+    <h3>Toko</h3>
+    <ul>
+      <li><b>Extra Heart:</b> memulihkan 1 nyawa.</li>
+      <li><b>Hint:</b> memasang 1 kartu yang benar.</li>
+      <li><b>Extra Time:</b> menambah 30 detik di Tantangan.</li>
+      <li><b>Heart Upgrade:</b> menambah kapasitas nyawa.</li>
+      <li><b>Card Skin:</b> mengganti tampilan kartu.</li>
+    </ul>
+    <p>Memakai Hint atau Extra Time di Tantangan membatasi hadiah menjadi 2 ⭐.</p>
+    <h3>Main berdua</h3>
+    <p>Lihat rasi? Tekan tombolmu lebih dulu (<b>A</b> atau <b>L</b> di keyboard), lalu pilih tiga kartu dalam 8 detik.</p>
+    <ul>
+      <li>Benar: kamu dapat 1 poin.</li>
+      <li>Salah atau waktu habis: lawan dapat 1 poin.</li>
+      <li>Yang pertama mencapai 5 poin menang.</li>
+      <li>Kalau salah atau waktu habis, satu rasi yang terlewat ditandai dengan garis putus-putus, lalu semua kartu dikocok.</li>
+      <li>Di keyboard, pilih kartu dengan huruf atau angka yang tertera di kartu.</li>
+    </ul>
+    <p>Buntu, tidak ada yang melihat rasi? Kalau <b>kedua</b> pemain menekan <b>Tukar</b>, tiga kartu diganti dan poin tidak berubah.</p>
+    <button class="tombol-menu utama" id="tombol-tutup-cara">Kembali</button>
+  </div>
+</section>
+
+<section id="layar-peta" class="layar" hidden>
+  <div class="isi-peta">
+    <div class="bar-peta">
+      <button class="ikon" id="tombol-peta-keluar" aria-label="Kembali ke menu">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <h2>Daftar level</h2>
+      <button class="ikon" id="tombol-peta-toko" aria-label="Buka Toko" style="margin-left:auto">
+        <svg viewBox="0 0 24 24"><path d="M6 8h12l-1 13H7zM9 8a3 3 0 0 1 6 0"/></svg>
+      </button>
+    </div>
+    <div class="status-peta" aria-live="off">
+      <div class="stat"><small>Nyawa</small><b id="stat-nyawa"></b><small id="stat-pulih"></small></div>
+      <div class="stat"><small>Star Wallet</small><b id="stat-wallet"></b><small>Untuk belanja</small></div>
+      <div class="stat"><small>Total Stars</small><b id="stat-total"></b><small id="stat-maks"></small></div>
+    </div>
+    <p class="keterangan" id="keterangan-peta"></p>
+    <div class="pager-chapter">
+      <button class="ikon" id="chapter-sebelum" aria-label="Chapter sebelumnya">
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="titik-chapter" id="titik-chapter" role="tablist" aria-label="Pilih chapter"></div>
+      <button class="ikon" id="chapter-berikut" aria-label="Chapter berikutnya">
+        <svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+    <div id="daftar-level" class="karusel-chapter"></div>
+    <details id="uji-main">
+      <summary id="judul-uji"></summary>
+      <div class="aksi-uji">
+        <button id="tombol-salin-uji">Salin data</button>
+        <button id="tombol-hapus-uji">Hapus data</button>
+        <button id="tombol-reset-progres">Reset progres</button>
+        <button id="tombol-buka-semua" aria-pressed="false"></button>
+      </div>
+      <textarea id="teks-uji" readonly hidden aria-label="Data uji main"></textarea>
+    </details>
+  </div>
+</section>
+
+<section id="layar-solo" class="layar" hidden>
+  <div class="bar-solo">
+    <button class="ikon" id="tombol-solo-keluar" aria-label="Kembali ke daftar level">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div class="info-solo">
+      <span id="judul-level"></span>
+      <div class="timer" id="timer-solo" hidden><i></i></div>
+    </div>
+    <button class="ikon" id="tombol-kosongkan" aria-label="Kosongkan papan">
+      <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/></svg>
+    </button>
+    <button class="ikon tombol-suara" aria-label="Matikan suara dan getar"></button>
+  </div>
+  <div class="area-solo">
+    <div id="papan" role="group" aria-label="Papan 3 kali 3"></div>
+    <div class="sisi-solo">
+      <p id="pesan-solo" aria-live="polite"></p>
+      <div id="kartu-sedia" role="group" aria-label="Kartu tersedia"></div>
+      <div class="baris-kunci">
+        <button class="tombol-item" id="tombol-hint"><span aria-hidden="true">💡</span><small id="stok-hint"></small></button>
+        <button class="tombol-menu utama" id="tombol-kunci">Kunci jawaban</button>
+        <button class="tombol-item" id="tombol-waktu" hidden><span aria-hidden="true">⏱️</span><small id="stok-waktu"></small></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="layar-profil" class="layar" hidden>
+  <div class="isi-toko">
+    <div class="bar-toko">
+      <button class="ikon" id="tombol-profil-keluar" aria-label="Keluar dari Profil">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <h2>Profil</h2>
+    </div>
+    <div class="status-peta" id="isi-profil"></div>
+    <p class="keterangan">Progres tersimpan di browser ini. Menghapus data browser berarti progres hilang.</p>
+  </div>
+</section>
+
+<section id="layar-toko" class="layar" hidden>
+  <div class="isi-toko">
+    <div class="bar-toko">
+      <button class="ikon" id="tombol-toko-keluar" aria-label="Keluar dari Toko">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <h2>Toko</h2>
+      <div class="saldo-toko">
+        <span id="saldo-nyawa"></span>
+        <span id="saldo-wallet"></span>
+      </div>
+    </div>
+    <div id="daftar-toko"></div>
+  </div>
+</section>
+
+<section id="layar-main" class="layar" hidden>
+  <div class="pemain p2" data-pemain="1">
+    <div class="baris-skor"><span class="nama">Pemain 2</span><span class="bintang-skor"></span></div>
+    <div class="aksi">
+      <button class="tombol-rebut"><span class="label">RASI!</span><span class="kunci">L</span></button>
+      <button class="tombol-tukar" aria-pressed="false" aria-label="Tukar kartu, butuh persetujuan kedua pemain">Tukar</button>
+    </div>
+    <p class="pesan" aria-live="polite"></p>
+  </div>
+
+  <div class="tengah">
+    <div class="bar-atas">
+      <button class="ikon" id="tombol-keluar" aria-label="Kembali ke menu">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="timer" id="timer"><i></i></div>
+      <button class="ikon tombol-suara" aria-label="Matikan suara dan getar"></button>
+    </div>
+    <div id="meja"></div>
+  </div>
+
+  <div class="pemain p1" data-pemain="0">
+    <div class="baris-skor"><span class="nama">Pemain 1</span><span class="bintang-skor"></span></div>
+    <div class="aksi">
+      <button class="tombol-rebut"><span class="label">RASI!</span><span class="kunci">A</span></button>
+      <button class="tombol-tukar" aria-pressed="false" aria-label="Tukar kartu, butuh persetujuan kedua pemain">Tukar</button>
+    </div>
+    <p class="pesan" aria-live="polite"></p>
+  </div>
+</section>
+
+<div id="lapisan-seret" aria-hidden="true"></div>
+<div id="lapisan-toast" aria-hidden="true"></div>
+
+<section id="layar-menang" hidden>
+  <div class="kotak-kaca">
+    <p id="judul-menang"></p>
+    <p id="skor-akhir"></p>
+    <button class="tombol-menu utama" id="tombol-ulang">Main lagi</button>
+    <button class="tombol-menu" id="tombol-menu">Menu</button>
+  </div>
+</section>
+
+<section id="layar-hasil" hidden>
+  <div class="kotak-kaca">
+    <p id="judul-hasil"></p>
+    <p id="stars-hasil" role="img" hidden></p>
+    <p id="nyawa-hasil" role="img" hidden></p>
+    <p id="hadiah-hasil" hidden></p>
+    <p id="detail-hasil"></p>
+    <p id="saran-hasil" hidden></p>
+    <button class="tombol-menu utama" id="tombol-level-lanjut">Level berikutnya</button>
+    <button class="tombol-menu" id="tombol-level-ulang">Ulangi</button>
+    <button class="tombol-menu" id="tombol-level-practice" hidden>Latihan dulu</button>
+    <button class="tombol-menu" id="tombol-level-peta">Daftar level</button>
+  </div>
+</section>
+
+<div id="dialog-keluar" role="dialog" aria-modal="true" aria-labelledby="judul-keluar" hidden>
+  <div class="kotak-dialog">
+    <h2 id="judul-keluar">Keluar dari pertandingan?</h2>
+    <p id="teks-keluar">Skor saat ini akan hilang.</p>
+    <button class="tombol-menu utama" id="tombol-lanjut-main">Lanjut main</button>
+    <button class="tombol-menu" id="tombol-yakin-keluar">Keluar</button>
+  </div>
+</div>
+
+<div id="dialog-mode" role="dialog" aria-modal="true" aria-labelledby="judul-mode" hidden>
+  <div class="kotak-dialog">
+    <h2 id="judul-mode"></h2>
+    <p id="info-mode"></p>
+    <button class="tombol-menu utama tombol-mode" id="tombol-mode-ranked">Tantangan<small id="sub-ranked"></small></button>
+    <p id="alasan-mode" hidden></p>
+    <button class="tombol-menu" id="tombol-mode-heart" hidden></button>
+    <button class="tombol-menu" id="tombol-mode-toko" hidden>Buka Toko</button>
+    <button class="tombol-menu tombol-mode" id="tombol-mode-practice">Practice<small>Tanpa batas waktu dan tanpa nyawa</small></button>
+    <button class="tombol-menu" id="tombol-mode-batal">Batal</button>
+  </div>
+</div>
+
+<script src="logika.js"></script>
+<script src="puzzle.js"></script>
+<script src="level.js"></script>
+<script src="progres.js"></script>
+<script src="gerak.js"></script>
+<script src="efek.js"></script>
+<script>
+(function () {
+  const L = window.Logika;
+  const P = window.Puzzle;
+  const LEVEL = window.DataLevel;
+  const LEVEL_PER_CHAPTER = 50;
+  const G = window.Gerak;
+  const E = window.Efek;
+  const JEDA_HASIL_MS = 1100;
+  const JEDA_MENANG_SOLO_MS = 1350;
+  const DURASI_TOAST_MS = 3000;
+  const KUNCI_UJI = 'setdoku-uji';
+  // Alat uji main hanya muncul kalau alamatnya memakai ?uji, jadi pemain biasa tidak melihatnya.
+  const MODE_UJI = new URLSearchParams(window.location.search).has('uji');
+  const JEDA_HASIL_SALAH_MS = 2000;
+  const TOMBOL_MEJA = '1234qwerasdf';
+  const TOMBOL_SEDIA = '1234567890-=';
+  const TOMBOL_SLOT = 'qweasdzxc';
+  const KARTU_PER_BARIS = 6;
+  const AMBANG_SERET_PX = 6;
+  const WARNA = [
+    { nama: 'emas', hex: '#fae242' },
+    { nama: 'biru es', hex: '#68dcf3' },
+    { nama: 'koral', hex: '#f0506e' },
+  ];
+  // Setiap latar wajib lolos tes kontras di tes/warna.test.js.
+  const SKIN_KARTU = [
+    { id: 'dasar', nama: 'Malam', latar: '#1d2350', tepi: '#39417f', latarTetap: '#22275b', tepiTetap: '#7a84d6' },
+    { id: 'senja', nama: 'Senja', latar: '#241136', tepi: '#6b3f86', latarTetap: '#361c48', tepiTetap: '#c58be0' },
+  ];
+  const BENTUK = ['bintang', 'bulan sabit', 'planet'];
+  const ISIAN = ['penuh', 'garis tepi', 'bertitik'];
+  const WARNA_PEMAIN = ['var(--p1)', 'var(--p2)'];
+  const HEX_PEMAIN = ['#a594ff', '#3fe0b5'];
+  const HEX_BENAR = '#5ee08a';
+  const HEX_SALAH = '#ff6b7d';
+
+  const PEGAS = {
+    layar: { redaman: 1, respons: 0.35 },
+    tombol: { redaman: 0.5, respons: 0.25 },
+    angkat: { redaman: 0.6, respons: 0.25 },
+    miring: { redaman: 0.7, respons: 0.3 },
+    mendarat: { redaman: 0.65, respons: 0.38 },
+    pipih: { redaman: 0.45, respons: 0.3 },
+    bagi: { redaman: 0.6, respons: 0.4 },
+    pilih: { redaman: 0.6, respons: 0.28 },
+    sorot: { redaman: 0.7, respons: 0.25 },
+    goyang: { redaman: 0.25, respons: 0.3 },
+    poin: { redaman: 0.85, respons: 0.34 },
+    pop: { redaman: 0.65, respons: 0.4 },
+    lompat: { redaman: 0.35, respons: 0.42 },
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const panel = [document.querySelector('.p1'), document.querySelector('.p2')];
+  const tombolRebut = panel.map((p) => p.querySelector('.tombol-rebut'));
+  const tombolTukar = panel.map((p) => p.querySelector('.tombol-tukar'));
+  const mejaEl = $('meja');
+  const timerEl = $('timer');
+  const timerIsi = timerEl.firstElementChild;
+  const lapisan = $('lapisan-seret');
+
+  const batas = (nilai, min, maks) => Math.min(maks, Math.max(min, nilai));
+  const campur = (a, b, t) => a + (b - a) * t;
+  const tengahDari = (r) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+
+  let s = null;
+  let idBingkaiTimer = null;
+  let jedaHasil = null;
+  let batasWaktu = 0;
+  let detikTerakhir = 0;
+  let kartuEl = [];
+  let idTampil = [];
+  let dipilihTampil = [];
+  let bintangEl = [[], []];
+  let skorTampil = [0, 0];
+  const LAMA_AJAK_RASI_MS = 1400;
+  let ajakRasi = false;
+  let idAjakRasi = null;
+  const jedaDuel = new Set();
+  const jedaSolo = new Set();
+
+  function tunda(kumpulan, fungsi, ms) {
+    const id = setTimeout(() => {
+      kumpulan.delete(id);
+      fungsi();
+    }, ms);
+    kumpulan.add(id);
+  }
+
+  function batalkanSemua(kumpulan) {
+    kumpulan.forEach(clearTimeout);
+    kumpulan.clear();
+  }
+
+  /* Teks melayang. jenis: perayaan, penalti, peringatan, atau info. Pesan baru menggantikan
+     yang lama, jadi layar tidak penuh walau penalti datang beruntun. Pesan ini tidak
+     dibacakan pembaca layar, karena isinya selalu ada juga sebagai teks biasa di layar. */
+  let toastAktif = null;
+  let idToast = null;
+
+  // Keluar searah dengan gerak naiknya, dari posisi di layar saat itu.
+  function buangToast(el) {
+    el.classList.add('keluar');
+    G.gerakkan(el).ke(G.kurangi() ? { buram: 0 } : { y: -12, buram: 0 }, {
+      redaman: 1,
+      respons: 0.32,
+      selesai: () => {
+        G.gerakkan(el).henti();
+        el.remove();
+      },
+    });
+  }
+
+  // Di layar pendek, pesan bisa menimpa kotak hasil. Isinya sudah ada di kotak itu.
+  function tutupToastYangMenimpa(kotak) {
+    if (!toastAktif) return;
+    const t = toastAktif.getBoundingClientRect();
+    const k = kotak.getBoundingClientRect();
+    if (t.left >= k.right || t.right <= k.left || t.top >= k.bottom || t.bottom <= k.top) return;
+    clearTimeout(idToast);
+    const el = toastAktif;
+    toastAktif = null;
+    buangToast(el);
+  }
+
+  function pesanMelayang(teks, jenis = 'info', sub = null) {
+    clearTimeout(idToast);
+    if (toastAktif) buangToast(toastAktif);
+    const el = document.createElement('div');
+    el.className = `toast ${jenis}${layarAktif === 'solo' ? ' di-solo' : layarAktif === 'toko' ? ' di-toko' : ''}`;
+    el.style.setProperty('--lama-toast', `${DURASI_TOAST_MS}ms`);
+    const isi = document.createElement('div');
+    isi.className = 'toast-isi';
+    const utama = document.createElement('span');
+    utama.className = 'toast-teks';
+    utama.textContent = teks;
+    isi.appendChild(utama);
+    if (sub) {
+      const kecil = document.createElement('span');
+      kecil.className = 'toast-sub';
+      kecil.textContent = sub;
+      isi.appendChild(kecil);
+    }
+    el.appendChild(isi);
+    $('lapisan-toast').appendChild(el);
+    const g = G.gerakkan(el);
+    g.set({ y: 14, skala: 0.96, buram: 0 });
+    g.ke({ y: 0, skala: 1, buram: 1 }, { redaman: 1, respons: 0.4 });
+    toastAktif = el;
+    // Mulai keluar sedikit lebih awal, supaya total tampilnya sekitar 3 detik.
+    idToast = setTimeout(() => {
+      if (toastAktif === el) toastAktif = null;
+      buangToast(el);
+    }, DURASI_TOAST_MS - 300);
+  }
+
+  // Memutar ulang animasi CSS sekali, walau kelasnya masih terpasang.
+  function picu(el, kelas, ms) {
+    el.classList.remove(kelas);
+    void el.offsetWidth;
+    el.classList.add(kelas);
+    setTimeout(() => el.classList.remove(kelas), ms);
+  }
+
+  /* Kartu */
+  function jalurBintang() {
+    let d = '';
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 ? 9 : 21;
+      const sudut = (-90 + i * 36) * Math.PI / 180;
+      d += (i ? 'L' : 'M') + (r * Math.cos(sudut)).toFixed(2) + ' ' + (r * Math.sin(sudut)).toFixed(2);
+    }
+    return d + 'Z';
+  }
+  const BINTANG = jalurBintang();
+  const BULAN = 'M13 -17A19 19 0 1 0 13 17A21 21 0 0 1 13 -17Z';
+
+  function simbol(k, y) {
+    const c = WARNA[k.warna].hex;
+    const isi = k.isian === 0 ? c : k.isian === 1 ? 'none' : `url(#titik-${k.warna})`;
+    const gaya = `fill="${isi}" stroke="${c}" stroke-width="2.4" stroke-linejoin="round"`;
+    const bentuk = [
+      `<path d="${BINTANG}" ${gaya}/>`,
+      `<path d="${BULAN}" ${gaya}/>`,
+      `<circle r="12.5" ${gaya}/><ellipse rx="21" ry="6.5" fill="none" stroke="${c}" stroke-width="2.4" transform="rotate(-22)"/>`,
+    ][k.bentuk];
+    return `<g transform="translate(50 ${y}) scale(.98)">${bentuk}</g>`;
+  }
+
+  function svgKartu(k) {
+    const posisi = [[70], [48, 92], [27, 70, 113]][k.jumlah];
+    return `<svg viewBox="0 0 100 140" aria-hidden="true">
+      <rect class="tepi" x="2" y="2" width="96" height="136" rx="11" fill="#1d2350" stroke="#39417f" stroke-width="2"/>
+      ${posisi.map((y) => simbol(k, y)).join('')}</svg>`;
+  }
+
+  function svgTertutup() {
+    return `<svg viewBox="0 0 100 140" aria-hidden="true">
+      <rect class="tepi" x="2" y="2" width="96" height="136" rx="11" fill="#1d2350" stroke="#39417f" stroke-width="2"/>
+      <text class="belakang-kartu" x="50" y="70">?</text></svg>`;
+  }
+
+  function namaKartu(k) {
+    return `${k.jumlah + 1} ${BENTUK[k.bentuk]} ${WARNA[k.warna].nama} ${ISIAN[k.isian]}`;
+  }
+
+  /* Suara dan getar */
+  let audio = null;
+  let bisingBuffer = null;
+  let bisu = false;
+  try {
+    // 'rasi-bisu' adalah kunci lama sebelum game diganti nama menjadi SETDOKU.
+    bisu = (localStorage.getItem('setdoku-bisu') ?? localStorage.getItem('rasi-bisu')) === '1';
+  } catch (e) {}
+
+  function konteksAudio() {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+    return audio;
+  }
+
+  function nada(frek, mulai, lama, jenis = 'triangle', volume = 0.14) {
+    if (bisu) return;
+    try {
+      const ctx = konteksAudio();
+      const t = ctx.currentTime + mulai;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = jenis;
+      osc.frequency.value = frek;
+      gain.gain.setValueAtTime(volume, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + lama);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + lama);
+    } catch (e) {}
+  }
+
+  // Sedikit noise memberi rasa "ketukan" pada kartu yang mendarat.
+  function desis(lama, volume, frekuensi) {
+    if (bisu) return;
+    try {
+      const ctx = konteksAudio();
+      if (!bisingBuffer) {
+        bisingBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.2), ctx.sampleRate);
+        const data = bisingBuffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      }
+      const t = ctx.currentTime;
+      const src = ctx.createBufferSource();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+      src.buffer = bisingBuffer;
+      filter.type = 'highpass';
+      filter.frequency.value = frekuensi;
+      gain.gain.setValueAtTime(volume, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + lama);
+      src.connect(filter).connect(gain).connect(ctx.destination);
+      src.start(t);
+      src.stop(t + lama);
+    } catch (e) {}
+  }
+
+  // Tangga nada C mayor: do re mi fa sol la si do. Nada mengikuti jumlah slot terisi,
+  // bukan benar atau salahnya kartu, jadi bunyinya tidak membocorkan jawaban.
+  const TANGGA = [262, 294, 330, 349, 392, 440, 494, 523];
+  const suara = {
+    tekan: () => nada(240, 0, 0.05, 'sine', 0.09),
+    ambil: () => { nada(440, 0, 0.06, 'sine', 0.1); nada(660, 0.035, 0.07, 'sine', 0.08); },
+    magnet: () => nada(1250, 0, 0.025, 'sine', 0.035),
+    tak: (n, penuh) => {
+      const f = TANGGA[n];
+      nada(f, 0, 0.22, 'triangle', 0.16);
+      nada(f / 2, 0, 0.07, 'sine', 0.14);
+      desis(0.03, 0.09, 2500);
+      // Slot terakhir terisi: do tinggi ditutup akor, sebagai tanda papan sudah penuh.
+      if (penuh) {
+        nada(TANGGA[2] * 2, 0.07, 0.3, 'triangle', 0.1);
+        nada(TANGGA[4] * 2, 0.14, 0.36, 'triangle', 0.1);
+      }
+    },
+    turun: (n) => nada(TANGGA[n], 0, 0.14, 'sine', 0.1),
+    kembali: () => nada(330, 0, 0.08, 'sine', 0.08),
+    tolak: () => nada(150, 0, 0.09, 'square', 0.06),
+    rebut: () => nada(660, 0, 0.12),
+    pilih: () => nada(520, 0, 0.07),
+    tukar: () => [392, 523].forEach((f, i) => nada(f, i * 0.08, 0.12)),
+    detik: () => nada(880, 0, 0.06, 'square'),
+    benar: () => [523, 659, 784].forEach((f, i) => nada(f, i * 0.09, 0.2)),
+    salah: () => [196, 147].forEach((f, i) => nada(f, i * 0.13, 0.24, 'sawtooth')),
+    menang: () => [523, 659, 784, 1047].forEach((f, i) => nada(f, i * 0.12, 0.3)),
+    star: (n) => nada([659, 784, 988][n], 0, 0.22),
+    beli: () => [587, 880].forEach((f, i) => nada(f, i * 0.07, 0.14)),
+    item: () => [784, 1047].forEach((f, i) => nada(f, i * 0.06, 0.14)),
+    nyawaHilang: () => nada(220, 0, 0.18, 'sine', 0.12),
+  };
+
+  const getar = (pola) => { if (!bisu) E.getar(pola); };
+
+  function gambarIkonSuara() {
+    const gelombang = bisu ? '<path d="M16 9l5 6M21 9l-5 6"/>' : '<path d="M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/>';
+    document.querySelectorAll('.tombol-suara').forEach((b) => {
+      b.innerHTML = `<svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10z"/>${gelombang}</svg>`;
+      b.setAttribute('aria-label', bisu ? 'Nyalakan suara dan getar' : 'Matikan suara dan getar');
+    });
+  }
+
+  /* Ganti layar */
+  const NAMA_LAYAR = ['menu', 'cara', 'main', 'peta', 'solo', 'toko', 'profil'];
+  let layarAktif = 'menu';
+
+  // Layar baru langsung bisa disentuh. Layar lama tetap bergerak sampai diam, lalu disembunyikan.
+  function gantiLayar(lama, baru, arah, asal) {
+    const gLama = G.gerakkan(lama);
+    const gBaru = G.gerakkan(baru);
+    const lebar = window.innerWidth;
+    const sudahTampil = !baru.hidden;
+    gBaru.batalSelesai();
+    baru.classList.remove('pergi');
+    baru.hidden = false;
+    lama.classList.add('pergi');
+    lama.style.zIndex = arah === 'susut' ? '2' : '1';
+    baru.style.zIndex = arah === 'susut' ? '1' : '2';
+
+    const selesaiLama = () => {
+      lama.hidden = true;
+      lama.classList.remove('pergi');
+      lama.style.zIndex = '';
+      lama.style.transformOrigin = '';
+      gLama.set({ x: 0, skala: 1, buram: 1 });
+    };
+
+    if (arah === 'tumbuh') {
+      baru.style.transformOrigin = `${asal.x}px ${asal.y}px`;
+      if (!sudahTampil) gBaru.set({ x: 0, skala: 0.18, buram: 0 });
+      gBaru.ke({ x: 0, skala: 1, buram: 1 }, PEGAS.layar);
+      gLama.ke({ buram: 0 }, { ...PEGAS.layar, selesai: selesaiLama });
+    } else if (arah === 'susut') {
+      lama.style.transformOrigin = `${asal.x}px ${asal.y}px`;
+      if (!sudahTampil) gBaru.set({ x: 0, skala: 1, buram: 0 });
+      gBaru.ke({ x: 0, skala: 1, buram: 1 }, PEGAS.layar);
+      gLama.ke({ skala: 0.18, buram: 0 }, { ...PEGAS.layar, selesai: selesaiLama });
+    } else {
+      const t = arah === 'maju' ? 1 : -1;
+      if (!sudahTampil) gBaru.set({ x: t * lebar * 0.24, skala: 1, buram: 0 });
+      gBaru.ke({ x: 0, skala: 1, buram: 1 }, PEGAS.layar);
+      gLama.ke({ x: -t * lebar * 0.16, buram: 0 }, { ...PEGAS.layar, selesai: selesaiLama });
+    }
+  }
+
+  function tampilkan(nama, arah = 'maju', asal = null) {
+    tutupOverlay($('layar-menang'));
+    tutupOverlay($('layar-hasil'));
+    const baru = $('layar-' + nama);
+    const lama = $('layar-' + layarAktif);
+    NAMA_LAYAR.forEach((n) => {
+      const el = $('layar-' + n);
+      if (el !== baru && el !== lama && !el.classList.contains('pergi')) el.hidden = true;
+    });
+    if (baru === lama) {
+      baru.hidden = false;
+      return;
+    }
+    layarAktif = nama;
+    gantiLayar(lama, baru, arah, asal);
+  }
+
+  /* Overlay kaca */
+  function overlayTerbuka(el) {
+    return !el.hidden && !el.classList.contains('pergi');
+  }
+
+  // asal: elemen pemicu. Kotak tumbuh dari elemen itu dan kembali ke sana saat ditutup.
+  function bukaOverlay(el, asal = null) {
+    const kotak = el.querySelector('.kotak-kaca, .kotak-dialog');
+    const gLatar = G.gerakkan(el);
+    const gKotak = G.gerakkan(kotak);
+    const baruDibuka = el.hidden;
+    gLatar.batalSelesai();
+    el.classList.remove('pergi');
+    el.hidden = false;
+    if (baruDibuka) {
+      gKotak.set({ skala: 1, buram: 1 });
+      if (asal) {
+        const r = kotak.getBoundingClientRect();
+        const titik = tengahDari(asal.getBoundingClientRect());
+        kotak.style.transformOrigin = `${titik.x - r.left}px ${titik.y - r.top}px`;
+      } else {
+        kotak.style.transformOrigin = '';
+      }
+      gLatar.set({ buram: 0 });
+      gKotak.set({ skala: asal ? 0.5 : 0.92, buram: 0 });
+    }
+    gLatar.ke({ buram: 1 }, PEGAS.layar);
+    gKotak.ke({ skala: 1, buram: 1 }, asal ? PEGAS.layar : PEGAS.pop);
+  }
+
+  function tutupOverlay(el) {
+    if (!overlayTerbuka(el)) return;
+    const kotak = el.querySelector('.kotak-kaca, .kotak-dialog');
+    const gLatar = G.gerakkan(el);
+    el.classList.add('pergi');
+    G.gerakkan(kotak).ke({ skala: kotak.style.transformOrigin ? 0.5 : 0.92, buram: 0 }, PEGAS.layar);
+    gLatar.ke({ buram: 0 }, {
+      ...PEGAS.layar,
+      selesai: () => {
+        el.hidden = true;
+        el.classList.remove('pergi');
+        gLatar.set({ buram: 1 });
+      },
+    });
+  }
+
+  /* Hantu: salinan yang bergerak bebas di atas layar. Posisinya mengacu ke tengah. */
+  function buatHantu(html, rect, lebar, kelas = '', rasio = 1.4) {
+    const tinggi = lebar * rasio;
+    const el = document.createElement('div');
+    el.className = `hantu ${kelas}`;
+    el.style.width = `${lebar}px`;
+    el.style.height = `${tinggi}px`;
+    el.innerHTML = html;
+    lapisan.appendChild(el);
+    const c = tengahDari(rect);
+    G.gerakkan(el).set({ x: c.x - lebar / 2, y: c.y - tinggi / 2, skala: rect.width / lebar });
+    return el;
+  }
+
+  function buangHantu(el) {
+    G.gerakkan(el).henti();
+    el.remove();
+  }
+
+  /* Tampilan Duel */
+  function siapkanMeja() {
+    mejaEl.textContent = '';
+    kartuEl = [];
+    idTampil = [];
+    dipilihTampil = [];
+    for (let i = 0; i < L.UKURAN_MEJA; i++) {
+      const b = document.createElement('button');
+      b.className = 'kartu';
+      b.dataset.kunci = TOMBOL_MEJA[i].toUpperCase();
+      b.addEventListener('click', () => klikKartu(i));
+      mejaEl.appendChild(b);
+      kartuEl.push(b);
+      idTampil.push(null);
+      dipilihTampil.push(false);
+    }
+  }
+
+  function siapkanBintang() {
+    panel.forEach((p, i) => {
+      const wadah = p.querySelector('.bintang-skor');
+      wadah.textContent = '';
+      wadah.setAttribute('role', 'img');
+      bintangEl[i] = [];
+      for (let n = 0; n < L.SKOR_MENANG; n++) {
+        wadah.insertAdjacentHTML('beforeend', `<svg viewBox="-24 -24 48 48"><path d="${BINTANG}" stroke-width="4"/></svg>`);
+        bintangEl[i].push(wadah.lastElementChild);
+      }
+    });
+  }
+
+  function masukkanKartu(b, k, mode, urutan) {
+    const tulis = () => {
+      b.innerHTML = svgKartu(k);
+      b.classList.remove('menunggu');
+    };
+    const g = G.gerakkan(b);
+    g.batalSelesai();
+    g.saatLangkah = null;
+    b.setAttribute('aria-label', namaKartu(k));
+    if (mode === 'balik') {
+      // Gambar diganti begitu kartu hampir tegak lurus, bukan menunggu pegas diam.
+      // Di perangkat lambat, gambar lama tidak boleh tampil lama setelah kartunya berganti.
+      g.saatLangkah = () => {
+        if (g.nilai('sx') > 0.12) return;
+        g.saatLangkah = null;
+        tulis();
+        g.ke({ sx: 1 }, PEGAS.pilih);
+      };
+      g.ke({ sx: 0 }, { redaman: 1, respons: 0.12, tunda: urutan * 45 });
+      return;
+    }
+    tulis();
+    g.set({ x: 0, y: -26, skala: 0.55, sx: 1, putar: urutan % 2 ? 9 : -9, buram: 0 });
+    g.ke({ y: 0, skala: 1, putar: 0, buram: 1 }, { ...PEGAS.bagi, tunda: urutan * 40 });
+  }
+
+  function gambarMeja(modeMasuk = 'bagi') {
+    let urutan = 0;
+    // G-05: saat salah atau waktu habis, tunjukkan satu rasi yang ada di meja.
+    const terlewat = (s.fase === 'hasil' && s.hasil.jenis !== 'benar' && L.cariTiga(s.meja)) || [];
+    s.meja.forEach((k, i) => {
+      const b = kartuEl[i];
+      const dipilih = s.pilihan.includes(i);
+      if (dipilih !== dipilihTampil[i]) {
+        dipilihTampil[i] = dipilih;
+        G.gerakkan(b).ke(dipilih ? { y: -6, skala: 1.05 } : { y: 0, skala: 1 }, PEGAS.pilih);
+      }
+      if (idTampil[i] !== k.id) {
+        idTampil[i] = k.id;
+        masukkanKartu(b, k, modeMasuk, urutan++);
+      }
+      const hasil = s.fase === 'hasil' && dipilih && s.hasil.jenis !== 'waktu';
+      b.classList.toggle('terlewat', terlewat.includes(i));
+      b.classList.toggle('dipilih', dipilih);
+      b.classList.toggle('benar', hasil && s.hasil.jenis === 'benar');
+      b.classList.toggle('salah', hasil && s.hasil.jenis === 'salah');
+      // Saat rebutan, kartu tetap menerima sentuhan supaya bisa mengingatkan pemain menekan RASI!.
+      b.disabled = s.fase !== 'memilih' && s.fase !== 'rebutan';
+      b.setAttribute('aria-disabled', s.fase === 'memilih' ? 'false' : 'true');
+      b.setAttribute('aria-pressed', dipilih ? 'true' : 'false');
+    });
+  }
+
+  // Bintang baru terisi saat poinnya tiba, jadi yang digambar adalah skorTampil.
+  function gambarSkor() {
+    panel.forEach((p, i) => {
+      bintangEl[i].forEach((b, n) => b.classList.toggle('isi', n < skorTampil[i]));
+      p.querySelector('.bintang-skor').setAttribute('aria-label', `${s.skor[i]} dari ${L.SKOR_MENANG} poin`);
+    });
+  }
+
+  function teksPesan(p) {
+    const lawan = `Pemain ${1 - p + 1}`;
+    if (s.fase === 'rebutan') {
+      if (ajakRasi) return 'Tekan RASI! dulu';
+      if (s.setuju[p]) return 'Menunggu lawan setuju tukar kartu';
+      if (s.setuju[1 - p]) return `${lawan} ingin tukar kartu`;
+      if (s.penukaran === 'otomatis') return 'Tidak ada rasi, kartu ditukar';
+      if (s.penukaran === 'bersama') return 'Kartu ditukar. Lihat rasi?';
+      if (s.penukaran === 'kocok') return 'Kartu dikocok. Lihat rasi?';
+      return 'Lihat rasi? Tekan tombolmu!';
+    }
+    if (s.fase === 'memilih') {
+      if (s.aktif !== p) return `${lawan} sedang memilih`;
+      return `Pilih 3 kartu (${s.pilihan.length}/3)`;
+    }
+    if (s.fase === 'hasil') {
+      const h = s.hasil;
+      if (h.jenis === 'benar') return h.pencetak === p ? 'Benar! +1 poin' : `Rasi benar, ${lawan} +1`;
+      if (h.pencetak === p) return h.jenis === 'waktu' ? 'Waktu lawan habis. +1 poin' : 'Lawan salah. +1 poin';
+      return h.jenis === 'waktu' ? 'Waktu habis. Rasi ditandai' : `Salah di ${h.gagal.join(', ')}`;
+    }
+    return '';
+  }
+
+  function gambarPemain() {
+    $('layar-main').classList.toggle('memilih', s.fase === 'memilih');
+    panel.forEach((p, i) => {
+      const aktif = s.fase === 'memilih' && s.aktif === i;
+      const tombol = tombolRebut[i];
+      tombol.disabled = s.fase !== 'rebutan' && !aktif;
+      tombol.classList.toggle('jalan', aktif);
+      if (!aktif) tombol.querySelector('.label').textContent = 'RASI!';
+      p.classList.toggle('aktif', aktif);
+      tombolTukar[i].disabled = s.fase !== 'rebutan';
+      tombolTukar[i].setAttribute('aria-pressed', s.setuju[i] ? 'true' : 'false');
+      p.querySelector('.pesan').textContent = teksPesan(i);
+    });
+  }
+
+  function gambarSemua(modeMasuk) {
+    gambarMeja(modeMasuk);
+    gambarSkor();
+    gambarPemain();
+  }
+
+  /* Alur Duel */
+  function hentikanTimer() {
+    cancelAnimationFrame(idBingkaiTimer);
+    idBingkaiTimer = null;
+    timerIsi.style.transform = 'scaleX(0)';
+    timerEl.classList.remove('gawat');
+  }
+
+  function bersihkan() {
+    hentikanTimer();
+    clearTimeout(idAjakRasi);
+    ajakRasi = false;
+    clearTimeout(jedaHasil);
+    jedaHasil = null;
+    batalkanSemua(jedaDuel);
+    lapisan.querySelectorAll('.poin, .bintang').forEach(buangHantu);
+  }
+
+  function mulai() {
+    bersihkan();
+    s = L.buatPermainan();
+    skorTampil = [0, 0];
+    tampilkan('main', 'maju');
+    siapkanMeja();
+    siapkanBintang();
+    gambarSemua();
+  }
+
+  function keMenu() {
+    bersihkan();
+    s = null;
+    tutupOverlay($('dialog-keluar'));
+    tampilkan('menu', 'mundur');
+  }
+
+  const DIALOG_KELUAR = {
+    duel: {
+      judul: 'Keluar dari pertandingan?',
+      teks: 'Skor saat ini akan hilang.',
+      tombol: 'tombol-keluar',
+    },
+    ranked: {
+      judul: 'Keluar dari Tantangan?',
+      teks: 'Percobaan ini dihitung gagal, dan 1 nyawa tidak kembali.',
+      tombol: 'tombol-solo-keluar',
+    },
+  };
+  let jenisKeluar = 'duel';
+
+  function bukaDialogKeluar(jenis = 'duel') {
+    jenisKeluar = jenis;
+    const d = DIALOG_KELUAR[jenis];
+    $('judul-keluar').textContent = d.judul;
+    $('teks-keluar').textContent = d.teks;
+    bukaOverlay($('dialog-keluar'), $(d.tombol));
+    $('tombol-lanjut-main').focus();
+  }
+
+  function tutupDialogKeluar() {
+    tutupOverlay($('dialog-keluar'));
+    $(DIALOG_KELUAR[jenisKeluar].tombol).focus();
+  }
+
+  function yakinKeluar() {
+    if (jenisKeluar === 'ranked') keluarRanked();
+    else keMenu();
+  }
+
+  function tukar(pemain) {
+    if (!s) return;
+    const r = L.tukarKartu(s, pemain);
+    if (!r) return;
+    G.gerakkan(tombolTukar[pemain]).dorong({ skala: 1.8 }, PEGAS.tombol);
+    getar(8);
+    if (r.ditukar) suara.tukar(); else suara.pilih();
+    gambarSemua('balik');
+  }
+
+  function riak(tombol) {
+    const el = document.createElement('span');
+    el.className = 'riak';
+    tombol.appendChild(el);
+    setTimeout(() => el.remove(), 520);
+  }
+
+  function tekan(pemain) {
+    if (!s || !L.tekanTombol(s, pemain)) return;
+    clearTimeout(idAjakRasi);
+    ajakRasi = false;
+    suara.rebut();
+    getar(15);
+    riak(tombolRebut[pemain]);
+    batasWaktu = performance.now() + L.DURASI_MS;
+    detikTerakhir = 0;
+    document.documentElement.style.setProperty('--warna-timer', WARNA_PEMAIN[pemain]);
+    const putaran = () => {
+      detak();
+      if (idBingkaiTimer !== null) idBingkaiTimer = requestAnimationFrame(putaran);
+    };
+    idBingkaiTimer = requestAnimationFrame(putaran);
+    gambarSemua();
+    detak();
+  }
+
+  function detak() {
+    const sisa = batasWaktu - performance.now();
+    if (sisa <= 0) {
+      hentikanTimer();
+      tampilkanHasil(L.waktuHabis(s));
+      return;
+    }
+    timerIsi.style.transform = `scaleX(${sisa / L.DURASI_MS})`;
+    timerEl.classList.toggle('gawat', sisa < 3000);
+    const detik = Math.ceil(sisa / 1000);
+    if (detik !== detikTerakhir) {
+      detikTerakhir = detik;
+      const label = tombolRebut[s.aktif].querySelector('.label');
+      label.textContent = detik;
+      G.gerakkan(label).dorong({ skala: detik <= 3 ? 4 : 2.2 }, PEGAS.pipih);
+      if (detik <= 3) suara.detik();
+    }
+  }
+
+  // Kartu diketuk sebelum RASI! ditekan: permainan tidak berubah, hanya mengingatkan.
+  function ingatkanRasi(i) {
+    suara.tolak();
+    getar(8);
+    G.gerakkan(kartuEl[i]).dorong({ x: i % 2 ? -220 : 220 }, PEGAS.goyang);
+    tombolRebut.forEach((tombol) => {
+      picu(tombol, 'ajak', 620);
+      G.gerakkan(tombol).dorong({ skala: 1.1 }, PEGAS.pipih);
+    });
+    ajakRasi = true;
+    clearTimeout(idAjakRasi);
+    idAjakRasi = setTimeout(() => {
+      ajakRasi = false;
+      if (s) gambarPemain();
+    }, LAMA_AJAK_RASI_MS);
+    gambarPemain();
+  }
+
+  function klikKartu(i) {
+    if (!s) return;
+    if (s.fase === 'rebutan') {
+      ingatkanRasi(i);
+      return;
+    }
+    const r = L.pilihKartu(s, s.aktif, i);
+    if (!r) return;
+    getar(6);
+    if (r.selesai) {
+      hentikanTimer();
+      tampilkanHasil(r.hasil);
+    } else {
+      suara.pilih();
+      gambarSemua();
+    }
+  }
+
+  // Dipanggil saat kartu atau bintang tiba di baris skor.
+  function poinMasuk(pencetak) {
+    if (!s) return;
+    skorTampil = s.skor.slice();
+    gambarSkor();
+    const bintang = bintangEl[pencetak][s.skor[pencetak] - 1];
+    if (!bintang) return;
+    G.gerakkan(bintang).dorong({ skala: 11 }, { redaman: 0.4, respons: 0.3 });
+    const c = tengahDari(bintang.getBoundingClientRect());
+    E.semburan(c.x, c.y, { warna: [HEX_PEMAIN[pencetak], '#ffffff'], jumlah: 14, laju: 260 });
+    suara.kembali();
+    getar(12);
+  }
+
+  // Menerbangkan hantu ke titik layar, dan memanggil tiba() begitu sudah dekat.
+  function terbangKePoin(hantu, titik, opsi, tiba) {
+    const m = G.gerakkan(hantu);
+    const lebar = hantu.offsetWidth;
+    const tinggi = hantu.offsetHeight;
+    const x = titik.x - lebar / 2;
+    const y = titik.y - tinggi / 2;
+    m.saatLangkah = () => {
+      if (Math.hypot(m.nilai('x') - x, m.nilai('y') - y) > 12) return;
+      m.saatLangkah = null;
+      buangHantu(hantu);
+      tiba();
+    };
+    m.ke({ x, y, ...opsi.target }, { ...PEGAS.poin, tunda: opsi.tunda || 0 });
+  }
+
+  function titikBintang(pemain) {
+    const bintang = bintangEl[pemain][s.skor[pemain] - 1] || bintangEl[pemain][L.SKOR_MENANG - 1];
+    return tengahDari(bintang.getBoundingClientRect());
+  }
+
+  function kartuKePoin(kartu, pencetak) {
+    const titik = titikBintang(pencetak);
+    let sudah = false;
+    kartu.forEach((b, n) => {
+      const hantu = buatHantu(b.innerHTML, b.getBoundingClientRect(), b.offsetWidth, 'poin');
+      b.classList.add('menunggu');
+      terbangKePoin(hantu, titik, { target: { skala: 0.14, putar: (n - 1) * 60 }, tunda: n * 55 }, () => {
+        if (sudah) return;
+        sudah = true;
+        poinMasuk(pencetak);
+      });
+    });
+  }
+
+  function bintangKeLawan(rectAsal, pencetak) {
+    const html = `<svg viewBox="-24 -24 48 48"><path d="${BINTANG}" fill="${HEX_PEMAIN[pencetak]}"/></svg>`;
+    const hantu = buatHantu(html, { left: rectAsal.left, top: rectAsal.top, width: 34, height: 34 }, 34, 'bintang', 1);
+    terbangKePoin(hantu, titikBintang(pencetak), { target: { skala: 0.6, putar: 200 } }, () => poinMasuk(pencetak));
+  }
+
+  function tampilkanHasil(hasil) {
+    const pemain = s.aktif;
+    const terpilih = s.pilihan.map((i) => kartuEl[i]);
+    gambarSemua();
+    if (hasil.jenis === 'benar') {
+      suara.benar();
+      getar([15, 40, 25]);
+      terpilih.forEach((b) => G.gerakkan(b).dorong({ skala: 2.6 }, PEGAS.pipih));
+      tunda(jedaDuel, () => kartuKePoin(terpilih, hasil.pencetak), 420);
+    } else {
+      suara.salah();
+      getar([30, 40, 30]);
+      if (hasil.jenis === 'salah') {
+        terpilih.forEach((b, n) => G.gerakkan(b).dorong({ x: n % 2 ? -340 : 340 }, PEGAS.goyang));
+      }
+      E.guncang(panel[pemain], 460);
+      const asal = (terpilih[1] || terpilih[0] || timerEl).getBoundingClientRect();
+      tunda(jedaDuel, () => bintangKeLawan(asal, hasil.pencetak), 320);
+      (L.cariTiga(s.meja) || []).forEach((i, n) => {
+        tunda(jedaDuel, () => G.gerakkan(kartuEl[i]).dorong({ skala: 2 }, PEGAS.pipih), 500 + n * 90);
+      });
+    }
+    // Jeda lebih lama saat salah, supaya rasi yang ditandai sempat dilihat.
+    jedaHasil = setTimeout(selesaiHasil, hasil.jenis === 'benar' ? JEDA_HASIL_MS : JEDA_HASIL_SALAH_MS);
+  }
+
+  function selesaiHasil() {
+    L.lanjutRonde(s);
+    skorTampil = s.skor.slice();
+    if (s.fase === 'selesai') {
+      gambarSkor();
+      suara.menang();
+      getar([20, 50, 20, 50, 40]);
+      E.konfeti([HEX_PEMAIN[s.pemenang], '#ffffff', ...WARNA.map((w) => w.hex)]);
+      $('judul-menang').textContent = `Pemain ${s.pemenang + 1} menang!`;
+      $('judul-menang').style.color = WARNA_PEMAIN[s.pemenang];
+      $('skor-akhir').textContent = `${s.skor[0]} : ${s.skor[1]}`;
+      bukaOverlay($('layar-menang'));
+      return;
+    }
+    if (s.penukaran === 'kocok') suara.tukar();
+    gambarSemua(s.penukaran === 'otomatis' || s.penukaran === 'kocok' ? 'balik' : 'bagi');
+  }
+
+  /* Data uji main: setiap level selesai dicatat di perangkat ini. */
+  function muatUji() {
+    try { return JSON.parse(localStorage.getItem(KUNCI_UJI)) || []; } catch (e) { return []; }
+  }
+
+  function catatUji(catatan) {
+    if (!MODE_UJI) return;
+    try { localStorage.setItem(KUNCI_UJI, JSON.stringify([...muatUji(), catatan])); } catch (e) {}
+  }
+
+  function teksUji() {
+    const baris = muatUji().map((c) => [c.level, c.detik, c.kunciSalah, c.waktu].join(','));
+    return ['level,detik,kunci_salah,waktu', ...baris].join('\n');
+  }
+
+  // Clipboard tidak tersedia di alamat http biasa, jadi datanya selalu juga
+  // ditampilkan di kotak teks supaya bisa disalin manual.
+  async function salinUji() {
+    const tombol = $('tombol-salin-uji');
+    const kotak = $('teks-uji');
+    kotak.value = teksUji();
+    kotak.hidden = false;
+    kotak.select();
+    try {
+      await navigator.clipboard.writeText(kotak.value);
+      tombol.textContent = 'Tersalin';
+    } catch (e) {
+      tombol.textContent = 'Salin manual dari kotak';
+    }
+    setTimeout(() => { tombol.textContent = 'Salin data'; }, 2500);
+  }
+
+  function hapusUji() {
+    if (!window.confirm('Hapus semua data uji main di perangkat ini?')) return;
+    try { localStorage.removeItem(KUNCI_UJI); } catch (e) {}
+    $('teks-uji').hidden = true;
+    gambarPeta();
+  }
+
+  // Supaya setiap pemain uji main mulai dari awal.
+  function resetProgres() {
+    if (!window.confirm('Reset semua progres di perangkat ini?')) return;
+    progres = R.buatProgres();
+    simpanProgres();
+    terapkanSkin();
+    gambarPeta();
+  }
+
+  /* Solo */
+  let sesi = null;
+  let levelAktif = null;
+  let mulaiLevelMs = 0;
+  let slotEl = [];
+  let sediaEl = [];
+  let idSlot = [];
+  let tombolLevel = [];
+  let kunciSiapTampil = false;
+  let pesanSementara = null;
+  let abaikanKlik = false;
+  let gestur = null;
+  let levelBaruSelesai = null;
+  let levelBaruTerbuka = null;
+  let aksiLanjut = null;
+  const terbangan = new Set();
+
+  /* Progres pemain. Terpisah dari Data uji main, yang akan dihapus sebelum rilis.
+     Kalau penyimpanan tidak tersedia, game tetap jalan dengan data di memori (P-07). */
+  const R = window.Progres;
+  const KUNCI_PROGRES = 'setdoku-progres';
+  let progres = R.buatProgres();
+  try { progres = R.muat(localStorage.getItem(KUNCI_PROGRES)); } catch (e) {}
+
+  function simpanProgres() {
+    try { localStorage.setItem(KUNCI_PROGRES, R.serialisasi(progres)); } catch (e) {}
+  }
+
+  // Ranked yang tertinggal berarti halaman ditutup atau dimuat ulang saat bermain (G-10).
+  let pesanPeta = null;
+  if (progres.berjalan !== null) {
+    pesanPeta = `Percobaan Tantangan level ${progres.berjalan} dihitung gagal karena halaman ditutup atau dimuat ulang.`;
+    R.gagalRanked(progres);
+    simpanProgres();
+  }
+
+  // Khusus uji main: Practice semua level terbuka, sedangkan Tantangan tetap mengikuti progres.
+  // Disimpan terpisah dari progres, dan ikut dibuang bersama Data uji main sebelum rilis.
+  const KUNCI_BUKA_SEMUA = 'setdoku-uji-buka-semua';
+  let bukaSemuaUji = false;
+  try { bukaSemuaUji = MODE_UJI && localStorage.getItem(KUNCI_BUKA_SEMUA) === '1'; } catch (e) {}
+  const levelBisaDibuka = (nomor) => bukaSemuaUji || R.levelTerbuka(progres, nomor);
+
+  function ubahBukaSemua() {
+    bukaSemuaUji = !bukaSemuaUji;
+    try { localStorage.setItem(KUNCI_BUKA_SEMUA, bukaSemuaUji ? '1' : '0'); } catch (e) {}
+    gambarPeta();
+  }
+
+  const CHAPTER = [
+    { nomor: 1, nama: 'Rookie Solver', aturan: 'Belajar menyusun rasi.', aksen: 'var(--p1)' },
+    { nomor: 2, nama: 'Pattern Master', aturan: 'Kartu punya 1 sampai 3 simbol, dan pengecohnya lebih meyakinkan.', aksen: 'var(--p2)' },
+    { nomor: 3, nama: 'Logic Expert', aturan: 'Sebagian kartu tertutup. Bentuk rasi untuk membukanya.', aksen: '#ffb86b' },
+  ];
+
+  let halamanChapter = null; // chapter yang tampil di karusel
+  let chapterBaruTerbuka = null; // karusel bergeser ke sini setelah kembali ke peta
+
+  // Chapter tempat pemain sedang berjuang: level terbuka pertama yang belum menang.
+  function chapterDepan() {
+    const l = LEVEL.find((x) => levelBisaDibuka(x.level) && !progres.rekor[x.level]);
+    return l ? l.chapter : CHAPTER.length;
+  }
+
+  function lebarHalamanChapter() {
+    const [a, b] = $('daftar-level').children;
+    return a && b ? b.offsetLeft - a.offsetLeft : 0;
+  }
+
+  function tandaiChapter() {
+    $('titik-chapter').querySelectorAll('.titik').forEach((b, i) => {
+      const aktif = i + 1 === halamanChapter;
+      b.setAttribute('aria-selected', aktif ? 'true' : 'false');
+      b.tabIndex = aktif ? 0 : -1;
+    });
+    $('chapter-sebelum').disabled = halamanChapter <= 1;
+    $('chapter-berikut').disabled = halamanChapter >= CHAPTER.length;
+  }
+
+  function keChapter(nomor, halus = true) {
+    halamanChapter = Math.min(Math.max(nomor, 1), CHAPTER.length);
+    const lebar = lebarHalamanChapter();
+    if (lebar > 0) {
+      $('daftar-level').scrollTo({ left: (halamanChapter - 1) * lebar, behavior: halus && !G.kurangi() ? 'smooth' : 'instant' });
+    }
+    tandaiChapter();
+  }
+
+  // Geseran jari atau trackpad memperbarui titik halaman.
+  $('daftar-level').addEventListener('scroll', () => {
+    const lebar = lebarHalamanChapter();
+    if (!lebar) return;
+    const nomor = Math.round($('daftar-level').scrollLeft / lebar) + 1;
+    if (nomor === halamanChapter) return;
+    halamanChapter = nomor;
+    tandaiChapter();
+    getar(6);
+  }, { passive: true });
+  $('chapter-sebelum').addEventListener('click', () => keChapter(halamanChapter - 1));
+  $('chapter-berikut').addEventListener('click', () => keChapter(halamanChapter + 1));
+  $('titik-chapter').addEventListener('keydown', (e) => {
+    const arah = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    if (!arah) return;
+    e.preventDefault();
+    keChapter(halamanChapter + arah);
+    $('titik-chapter').children[halamanChapter - 1].focus();
+  });
+
+  function alasanTerkunci(nomor) {
+    const syarat = R.syaratLevel(progres, nomor);
+    if (!syarat) return null;
+    if (syarat.jenis === 'stars') return `Butuh ${syarat.butuh}\u00a0⭐ Total Stars. Sekarang ${progres.totalStars}\u00a0⭐.`;
+    return `Menangkan Tantangan level ${syarat.level} untuk membuka level ${nomor}.`;
+  }
+
+  const JALUR_GEMBOK = 'M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z';
+  let idIntervalPeta = null;
+
+  function gambarStatusPeta() {
+    const sisaPulih = R.sisaPulihMs(progres, Date.now());
+    $('stat-nyawa').textContent = `${progres.nyawa}/${progres.nyawaMaks}`;
+    $('stat-pulih').textContent = sisaPulih === null ? 'Penuh' : `+1 dalam ${formatWaktu(Math.ceil(sisaPulih / 1000))}`;
+    $('stat-wallet').textContent = `${progres.wallet} ⭐`;
+    $('stat-total').textContent = `${progres.totalStars} ⭐`;
+    $('stat-maks').textContent = `Dari ${LEVEL.length * 3} ⭐`;
+  }
+
+  // Hitung mundur nyawa hanya berjalan selama peta terlihat.
+  function detakStatusPeta() {
+    clearInterval(idIntervalPeta);
+    gambarStatusPeta();
+    idIntervalPeta = setInterval(() => {
+      if (layarAktif === 'peta') {
+        gambarStatusPeta();
+        return;
+      }
+      clearInterval(idIntervalPeta);
+      idIntervalPeta = null;
+    }, 1000);
+  }
+
+  function tolakLevel(nomor) {
+    suara.tolak();
+    getar(10);
+    E.guncang(tombolLevel[nomor - 1], 300);
+    const keterangan = $('keterangan-peta');
+    keterangan.textContent = alasanTerkunci(nomor);
+    pesanMelayang(`Level ${nomor} terkunci`, 'peringatan');
+    keterangan.classList.add('peringatan');
+  }
+
+  function gambarPeta(masuk = false) {
+    const keterangan = $('keterangan-peta');
+    keterangan.textContent = pesanPeta || 'Pilih level, lalu pilih Practice atau Tantangan.';
+    keterangan.classList.toggle('peringatan', pesanPeta !== null);
+    pesanPeta = null;
+    detakStatusPeta();
+    const wadah = $('daftar-level');
+    wadah.textContent = '';
+    const titik = $('titik-chapter');
+    titik.textContent = '';
+    if (halamanChapter === null) halamanChapter = chapterDepan();
+    chapterBaruTerbuka = levelBaruTerbuka && R.AMBANG_CHAPTER[levelBaruTerbuka] ? LEVEL[levelBaruTerbuka - 1].chapter : null;
+    const gridChapter = {};
+    CHAPTER.forEach((c) => {
+      const isi = LEVEL.filter((l) => l.chapter === c.nomor);
+      const butuh = R.AMBANG_CHAPTER[isi[0].level];
+      const kurangStars = butuh && progres.totalStars < butuh && !bukaSemuaUji;
+      const menang = isi.filter((l) => progres.rekor[l.level]).length;
+      const stars = isi.reduce((n, l) => n + (progres.rekor[l.level] || 0), 0);
+
+      const halaman = document.createElement('section');
+      halaman.className = 'halaman-chapter';
+      halaman.id = `halaman-chapter-${c.nomor}`;
+      halaman.setAttribute('role', 'tabpanel');
+      halaman.setAttribute('aria-label', `Chapter ${c.nomor}: ${c.nama}`);
+      halaman.style.setProperty('--aksen', c.aksen);
+      halaman.innerHTML = `<div class="kepala-chapter">
+          <h3 class="judul-chapter"></h3>
+          <p class="aturan-chapter${kurangStars ? ' terkunci' : ''}"></p>
+          <div class="meter-chapter" role="progressbar" aria-label="Level Tantangan yang sudah menang"
+            aria-valuemin="0" aria-valuemax="${isi.length}" aria-valuenow="${menang}"><span style="width:${(menang / isi.length) * 100}%"></span></div>
+          <small class="angka-chapter">${menang}/${isi.length} level · ${stars}/${isi.length * 3}\u00a0⭐</small>
+        </div><div class="grid-level"></div>`;
+      halaman.querySelector('.judul-chapter').textContent = `Chapter ${c.nomor}: ${c.nama}`;
+      halaman.querySelector('.aturan-chapter').textContent = kurangStars
+        ? `Butuh ${butuh}\u00a0⭐ Total Stars. Sekarang ${progres.totalStars}\u00a0⭐`
+        : c.aturan;
+      wadah.appendChild(halaman);
+      gridChapter[c.nomor] = halaman.querySelector('.grid-level');
+
+      const tab = document.createElement('button');
+      tab.className = `titik${kurangStars ? ' terkunci' : ''}`;
+      tab.textContent = c.nomor;
+      tab.style.setProperty('--aksen', c.aksen);
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-controls', halaman.id);
+      tab.setAttribute('aria-label', `Chapter ${c.nomor}: ${c.nama}${kurangStars ? ', terkunci' : ''}`);
+      tab.addEventListener('click', () => keChapter(c.nomor));
+      titik.appendChild(tab);
+    });
+    tombolLevel = LEVEL.map((l, n) => {
+      const nomor = l.level;
+      const b = document.createElement('button');
+      const sudah = R.levelSelesai(progres, nomor);
+      const terbuka = levelBisaDibuka(nomor);
+      const stars = progres.rekor[nomor] || 0;
+      b.className = [
+        'tombol-level',
+        sudah && 'selesai',
+        stars > 0 && 'punya-stars',
+        !terbuka && 'terkunci',
+        nomor === levelBaruSelesai && 'baru-selesai',
+        nomor === levelBaruTerbuka && 'baru-terbuka',
+      ].filter(Boolean).join(' ');
+      const bawah = stars > 0
+        ? '⭐'.repeat(stars)
+        : terbuka ? '' : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${JALUR_GEMBOK}"/></svg>`;
+      b.innerHTML = `<span class="nomor">${nomor}</span>${bawah ? `<span class="bawah">${bawah}</span>` : ''}`;
+      const status = !terbuka ? ', terkunci' : stars > 0 ? `, ${stars} Stars` : sudah ? ', selesai' : '';
+      b.setAttribute('aria-label', `Level ${nomor}${status}`);
+      // Level terkunci tetap menerima sentuhan, supaya bisa menjelaskan cara membukanya.
+      b.setAttribute('aria-disabled', terbuka ? 'false' : 'true');
+      b.addEventListener('click', () => {
+        if (levelBisaDibuka(nomor)) bukaPilihMode(nomor);
+        else tolakLevel(nomor);
+      });
+      gridChapter[l.chapter].appendChild(b);
+      // Hanya chapter yang terlihat yang ikut animasi masuk.
+      if (masuk && l.chapter === halamanChapter) {
+        G.gerakkan(b).set({ y: 14, skala: 0.72, buram: 0 });
+        G.gerakkan(b).ke({ y: 0, skala: 1, buram: 1 }, { ...PEGAS.bagi, tunda: 60 + Math.min(n % LEVEL_PER_CHAPTER, 20) * 18 });
+      }
+      return b;
+    });
+    levelBaruSelesai = null;
+    levelBaruTerbuka = null;
+    // Membangun ulang karusel mengembalikan posisinya ke awal, jadi posisinya dipasang lagi.
+    if (!$('layar-peta').hidden) keChapter(halamanChapter, false);
+    else tandaiChapter();
+    $('judul-uji').textContent = `Data uji main (${muatUji().length} catatan)`;
+    const tombolBuka = $('tombol-buka-semua');
+    tombolBuka.textContent = `Buka semua level: ${bukaSemuaUji ? 'nyala' : 'mati'}`;
+    tombolBuka.setAttribute('aria-pressed', bukaSemuaUji ? 'true' : 'false');
+  }
+
+  function bukaPeta() {
+    hentikanSolo();
+    gambarPeta(true);
+    tampilkan('peta', 'maju');
+    keChapter(halamanChapter, false);
+  }
+
+  // Papan mengecil kembali ke tombol level asalnya.
+  function kembaliKePeta() {
+    const nomor = levelAktif ? levelAktif.level : 1;
+    hentikanSolo();
+    halamanChapter = LEVEL[nomor - 1].chapter;
+    gambarPeta();
+    const peta = $('layar-peta');
+    const tersembunyi = peta.hidden;
+    peta.hidden = false;
+    // Papan mengecil ke tombol asalnya, jadi chapter dan baris tombol itu harus terlihat.
+    keChapter(halamanChapter, false);
+    tombolLevel[nomor - 1].scrollIntoView({ block: 'center', inline: 'nearest' });
+    const titik = tengahDari(tombolLevel[nomor - 1].getBoundingClientRect());
+    peta.hidden = tersembunyi;
+    tampilkan('peta', 'susut', titik);
+    // Chapter baru terbuka: karusel bergeser sendiri ke sana setelah papan selesai mengecil.
+    const tujuan = chapterBaruTerbuka;
+    chapterBaruTerbuka = null;
+    if (tujuan && tujuan !== halamanChapter) {
+      setTimeout(() => {
+        if (layarAktif !== 'peta') return;
+        keChapter(tujuan);
+        document.querySelector('.pager-chapter').scrollIntoView({ block: 'nearest', behavior: G.kurangi() ? 'instant' : 'smooth' });
+      }, 900);
+    }
+  }
+
+  function hentikanSolo() {
+    batalkanSemua(jedaSolo);
+    hentikanTimerRanked();
+    gestur = null;
+    terbangan.forEach((f) => buangHantu(f.hantu));
+    terbangan.clear();
+    lapisan.querySelectorAll('.hantu:not(.poin, .bintang)').forEach(buangHantu);
+    sesi = null;
+  }
+
+  function buatTombolKartu(wadah, kelas, saatDitekan) {
+    const b = document.createElement('button');
+    b.className = kelas;
+    // Setelah kartu diseret, browser masih mengirim click. Klik keyboard (detail 0) selalu lolos.
+    b.addEventListener('click', (e) => {
+      if (abaikanKlik && e.detail !== 0) {
+        abaikanKlik = false;
+        return;
+      }
+      saatDitekan();
+    });
+    wadah.appendChild(b);
+    return b;
+  }
+
+  // Mengembalikan false kalau Ranked ditolak: level terkunci atau nyawa habis.
+  function mulaiLevel(nomor, asal = null, mode = 'practice') {
+    const ranked = mode === 'ranked';
+    if (ranked) {
+      if (!R.mulaiRanked(progres, nomor, Date.now())) return false;
+      simpanProgres();
+    } else if (!levelBisaDibuka(nomor)) {
+      return false;
+    }
+    hentikanSolo();
+    modeRanked = ranked;
+    levelAktif = LEVEL[nomor - 1];
+    sesi = P.mulaiSesi(ranked ? levelAktif.ranked : levelAktif.practice);
+    mulaiLevelMs = performance.now();
+    pesanSementara = null;
+    kunciSiapTampil = false;
+    pakaiHint = false;
+    pakaiWaktu = false;
+    $('judul-level').textContent = `Level ${nomor}`;
+    $('judul-level').classList.remove('gawat');
+    $('layar-solo').classList.toggle('ranked', ranked);
+    $('timer-solo').hidden = !ranked;
+    $('layar-solo').style.setProperty('--pool-baris', Math.ceil(sesi.tersedia.length / KARTU_PER_BARIS));
+
+    $('papan').textContent = '';
+    idSlot = sesi.papan.map(() => null);
+    slotEl = sesi.papan.map((_, i) => {
+      const b = buatTombolKartu($('papan'), 'slot', () => tekanSlotSolo(i));
+      b.dataset.kunci = TOMBOL_SLOT[i].toUpperCase();
+      pasangTekanKartu(b, () => sumberSlot(i));
+      return b;
+    });
+    $('kartu-sedia').textContent = '';
+    sediaEl = sesi.tersedia.map((id, n) => {
+      const b = buatTombolKartu($('kartu-sedia'), 'sedia', () => tekanKartuSolo(id));
+      const tertutup = P.kartuTertutup(sesi, id);
+      b.innerHTML = tertutup ? svgTertutup() : svgKartu(P.DEK[id]);
+      b.classList.toggle('tertutup', tertutup);
+      b.dataset.kunci = TOMBOL_SEDIA[n].toUpperCase();
+      b.setAttribute('aria-label', tertutup ? 'Kartu tertutup' : namaKartu(P.DEK[id]));
+      pasangTekanKartu(b, () => (P.kartuTertutup(sesi, id) ? null : { sedia: n, id }));
+      return b;
+    });
+
+    tampilkan('solo', asal ? 'tumbuh' : 'maju', asal);
+    gambarSolo();
+    mainkanMasukPapan();
+    if (ranked) mulaiTimerRanked(R.DURASI_MS[levelAktif.kesulitan]);
+    return true;
+  }
+
+  /* Pilih Mode */
+  const NAMA_KESULITAN = { easy: 'Mudah', medium: 'Sedang', hard: 'Sulit' };
+  let levelPilihan = null;
+  let idIntervalMode = null;
+
+  function gambarPilihMode() {
+    const nomor = levelPilihan;
+    const l = LEVEL[nomor - 1];
+    const sisaPulih = R.sisaPulihMs(progres, Date.now());
+    const terbuka = R.levelTerbuka(progres, nomor);
+    const adaNyawa = progres.nyawa > 0;
+    const rekor = progres.rekor[nomor] || 0;
+    $('judul-mode').textContent = `Level ${nomor}`;
+    $('info-mode').textContent = [
+      NAMA_KESULITAN[l.kesulitan],
+      `Nyawa ${progres.nyawa}/${progres.nyawaMaks}`,
+      rekor ? `Rekor ${'⭐'.repeat(rekor)}` : null,
+    ].filter(Boolean).join(' · ');
+    $('sub-ranked').textContent = `Waktu ${formatWaktu(R.DURASI_MS[l.kesulitan] / 1000)} · butuh 1 nyawa`;
+    $('tombol-mode-ranked').disabled = !terbuka || !adaNyawa;
+    const alasan = $('alasan-mode');
+    if (!terbuka) alasan.textContent = alasanTerkunci(nomor);
+    else if (!adaNyawa) alasan.textContent = `Nyawa habis. Nyawa berikutnya pulih dalam ${formatWaktu(Math.ceil(sisaPulih / 1000))}.`;
+    alasan.hidden = terbuka && adaNyawa;
+    // Nyawa habis tidak boleh jadi jalan buntu: tawarkan Extra Heart atau Toko.
+    const stokHeart = progres.barang.heart;
+    const nyawaHabis = terbuka && !adaNyawa;
+    $('tombol-mode-heart').hidden = !nyawaHabis || stokHeart === 0;
+    $('tombol-mode-heart').textContent = `Pakai Extra Heart (punya ${stokHeart})`;
+    $('tombol-mode-toko').hidden = !nyawaHabis || stokHeart > 0;
+  }
+
+  function pakaiHeartDiMode() {
+    if (!R.pakai(progres, 'heart')) return;
+    simpanProgres();
+    suara.item();
+    getar(12);
+    gambarPilihMode();
+    gambarStatusPeta();
+    pesanMelayang('Nyawa pulih', 'info');
+    $('tombol-mode-ranked').focus();
+  }
+
+  /* Toko */
+  const ITEM_TOKO = [
+    { id: 'heart', ikon: '❤️', nama: 'Extra Heart', efek: 'Pulihkan 1 nyawa' },
+    { id: 'hint', ikon: '💡', nama: 'Hint', efek: 'Pasang 1 kartu yang benar. Di Tantangan, hadiah maksimal 2 ⭐' },
+    { id: 'waktu', ikon: '⏱️', nama: 'Extra Time', efek: 'Tambah 30 detik di Tantangan. Hadiah maksimal 2 ⭐' },
+    { id: 'upgrade', ikon: '💗', nama: 'Heart Upgrade', efek: '+1 kapasitas nyawa, permanen', yakin: true },
+    { id: 'skin', ikon: pratinjauSkin('senja'), nama: 'Card Skin Senja', efek: 'Tampilan kartu baru. Tidak mengubah permainan', yakin: true },
+  ];
+
+  function terapkanSkin() {
+    const skin = SKIN_KARTU.find((s) => s.id === progres.skinAktif) || SKIN_KARTU[0];
+    const gaya = document.documentElement.style;
+    gaya.setProperty('--latar-kartu', skin.latar);
+    gaya.setProperty('--tepi-kartu', skin.tepi);
+    gaya.setProperty('--latar-tetap', skin.latarTetap);
+    gaya.setProperty('--tepi-tetap', skin.tepiTetap);
+  }
+
+  function pratinjauSkin(id) {
+    const skin = SKIN_KARTU.find((s) => s.id === id);
+    return svgKartu({ bentuk: 0, warna: 0, jumlah: 0, isian: 0 })
+      .replace('class="tepi"', `class="tepi" style="fill:${skin.latar};stroke:${skin.tepi}"`);
+  }
+
+  function ubahSkin() {
+    if (!R.pilihSkin(progres, progres.skinAktif === 'senja' ? 'dasar' : 'senja')) return;
+    simpanProgres();
+    terapkanSkin();
+    suara.pilih();
+    getar(8);
+    gambarToko();
+    pesanMelayang(progres.skinAktif === 'senja' ? 'Card Skin Senja dipakai' : 'Kembali ke kartu dasar', 'info');
+  }
+  const MAKS_YAKIN_MS = 3000;
+  let asalToko = 'menu';
+  let itemYakin = null;
+  let idYakin = null;
+
+  function bangunToko() {
+    ITEM_TOKO.forEach((item) => {
+      const pakai = {
+        heart: '<button class="tombol-beli sekunder" id="pakai-heart">Pakai</button>',
+        skin: '<button class="tombol-beli sekunder" id="pakai-skin" hidden></button>',
+      }[item.id] || '';
+      $('daftar-toko').insertAdjacentHTML('beforeend', `
+        <div class="kartu-toko">
+          <span class="ikon-toko" aria-hidden="true">${item.ikon}</span>
+          <div class="teks-toko">
+            <b>${item.nama}</b>
+            <small>${item.efek}</small>
+            <small class="punya" id="punya-${item.id}"></small>
+          </div>
+          <div class="aksi-toko">
+            <button class="tombol-beli" id="beli-${item.id}"></button>
+            ${pakai}
+          </div>
+        </div>`);
+      $(`beli-${item.id}`).addEventListener('click', () => beliItem(item));
+    });
+    $('pakai-heart').addEventListener('click', pakaiHeartDiToko);
+    $('pakai-skin').addEventListener('click', ubahSkin);
+  }
+
+  function gambarToko() {
+    R.pulihkanNyawa(progres, Date.now());
+    const punyaSenja = progres.koleksi.includes('senja');
+    $('saldo-nyawa').textContent = `❤️ ${progres.nyawa}/${progres.nyawaMaks}`;
+    $('saldo-nyawa').setAttribute('aria-label', `Nyawa ${progres.nyawa} dari ${progres.nyawaMaks}`);
+    $('saldo-wallet').textContent = `${progres.wallet} ⭐`;
+    $('saldo-wallet').setAttribute('aria-label', `Star Wallet ${progres.wallet}`);
+    ITEM_TOKO.forEach((item) => {
+      const harga = R.HARGA[item.id];
+      const tombol = $(`beli-${item.id}`);
+      const yakin = itemYakin === item.id;
+      tombol.textContent = yakin ? 'Yakin?' : `${harga} ⭐`;
+      tombol.classList.toggle('yakin', yakin);
+      tombol.setAttribute('aria-disabled', progres.wallet >= harga ? 'false' : 'true');
+      tombol.setAttribute('aria-label', yakin ? `Tekan lagi untuk membeli ${item.nama}` : `Beli ${item.nama}, ${harga} Stars`);
+      const dimiliki = item.id === 'skin' && punyaSenja;
+      tombol.disabled = dimiliki;
+      if (dimiliki) {
+        tombol.textContent = 'Dimiliki';
+        tombol.setAttribute('aria-label', `${item.nama} sudah dimiliki`);
+      }
+      const punya = {
+        upgrade: `Kapasitas sekarang ${progres.nyawaMaks}`,
+        skin: !punyaSenja ? 'Belum dimiliki' : progres.skinAktif === 'senja' ? 'Sedang dipakai' : 'Tidak dipakai',
+      };
+      $(`punya-${item.id}`).textContent = punya[item.id] || `Punya ${progres.barang[item.id]}`;
+    });
+    const pakaiSkin = $('pakai-skin');
+    pakaiSkin.hidden = !punyaSenja;
+    pakaiSkin.textContent = progres.skinAktif === 'senja' ? 'Lepas' : 'Pakai';
+    pakaiSkin.setAttribute('aria-label', progres.skinAktif === 'senja' ? 'Lepas Card Skin Senja' : 'Pakai Card Skin Senja');
+    const pakai = $('pakai-heart');
+    pakai.disabled = progres.barang.heart === 0 || progres.nyawa >= progres.nyawaMaks;
+    pakai.setAttribute('aria-label', 'Pakai Extra Heart');
+  }
+
+  function batalYakin() {
+    clearTimeout(idYakin);
+    itemYakin = null;
+  }
+
+  // Item permanen menghabiskan banyak Stars Chapter 1 dan tidak bisa dibatalkan, jadi perlu
+  // dua kali tekan. Item sekali pakai cukup sekali tekan.
+  function beliItem(item) {
+    const harga = R.HARGA[item.id];
+    const tombol = $(`beli-${item.id}`);
+    if (progres.wallet < harga) {
+      batalYakin();
+      suara.tolak();
+      getar(10);
+      E.guncang($('saldo-wallet'), 260);
+      pesanMelayang(`Star Wallet kurang ${harga - progres.wallet} ⭐`, 'peringatan');
+      gambarToko();
+      return;
+    }
+    if (item.yakin && itemYakin !== item.id) {
+      batalYakin();
+      itemYakin = item.id;
+      idYakin = setTimeout(() => {
+        itemYakin = null;
+        gambarToko();
+      }, MAKS_YAKIN_MS);
+      suara.pilih();
+      gambarToko();
+      return;
+    }
+    batalYakin();
+    if (!R.beli(progres, item.id)) return;
+    // Skin yang baru dibeli langsung dipakai, supaya pemain langsung melihat hasilnya.
+    if (item.id === 'skin') {
+      R.pilihSkin(progres, 'senja');
+      terapkanSkin();
+    }
+    simpanProgres();
+    suara.beli();
+    getar(12);
+    gambarToko();
+    const c = tengahDari(tombol.getBoundingClientRect());
+    E.semburan(c.x, c.y, { warna: ['#fae242', '#ffffff'], jumlah: 12, laju: 240 });
+    G.gerakkan($('saldo-wallet')).dorong({ skala: 2.2 }, PEGAS.pipih);
+    G.gerakkan($(`punya-${item.id}`)).dorong({ skala: 1.4 }, PEGAS.pipih);
+    pesanMelayang(`${item.nama} dibeli`, 'info');
+  }
+
+  function pakaiHeartDiToko() {
+    if (!R.pakai(progres, 'heart')) return;
+    simpanProgres();
+    suara.item();
+    getar(12);
+    gambarToko();
+    G.gerakkan($('saldo-nyawa')).dorong({ skala: 2.2 }, PEGAS.pipih);
+    pesanMelayang('Nyawa pulih', 'info');
+  }
+
+  function bukaToko(asal) {
+    asalToko = asal;
+    batalYakin();
+    gambarToko();
+    tampilkan('toko', 'maju');
+  }
+
+  function tutupToko() {
+    batalYakin();
+    if (asalToko === 'peta') gambarPeta();
+    tampilkan(asalToko, 'mundur');
+  }
+
+  /* Profil */
+  function bukaProfil() {
+    const sisaPulih = R.sisaPulihMs(progres, Date.now());
+    const terbuka = LEVEL.filter((l) => R.levelTerbuka(progres, l.level)).length;
+    const menang = LEVEL.filter((l) => progres.rekor[l.level]).length;
+    const skin = SKIN_KARTU.find((s) => s.id === progres.skinAktif) || SKIN_KARTU[0];
+    const b = progres.barang;
+    const baris = [
+      ['Level Solo', terbuka, `Dari ${LEVEL.length} level`],
+      ['Tantangan menang', menang, `Dari ${LEVEL.length} level`],
+      ['Total Stars', `${progres.totalStars} ⭐`, `Dari ${LEVEL.length * 3} ⭐`],
+      ['Star Wallet', `${progres.wallet} ⭐`, 'Untuk belanja'],
+      ['Nyawa', `${progres.nyawa}/${progres.nyawaMaks}`, sisaPulih === null ? 'Penuh' : `+1 dalam ${formatWaktu(Math.ceil(sisaPulih / 1000))}`],
+      ['Card Skin', skin.nama, `Heart ${b.heart} · Hint ${b.hint} · Time ${b.waktu}`],
+    ];
+    const wadah = $('isi-profil');
+    wadah.textContent = '';
+    baris.forEach(([label, nilai, catatan]) => {
+      const el = document.createElement('div');
+      el.className = 'stat';
+      [['small', label], ['b', nilai], ['small', catatan]].forEach(([tag, isi]) => {
+        const t = document.createElement(tag);
+        t.textContent = isi;
+        el.appendChild(t);
+      });
+      wadah.appendChild(el);
+    });
+    tampilkan('profil', 'maju');
+  }
+
+  /* Item saat bermain */
+  let pakaiHint = false;
+  let pakaiWaktu = false;
+
+  function gambarItemSolo() {
+    const hint = $('tombol-hint');
+    const waktu = $('tombol-waktu');
+    const stokHint = progres.barang.hint;
+    const stokWaktu = progres.barang.waktu;
+    $('stok-hint').textContent = stokHint;
+    $('stok-waktu').textContent = stokWaktu;
+    hint.setAttribute('aria-disabled', stokHint > 0 && !sesi.selesai ? 'false' : 'true');
+    hint.setAttribute('aria-label', `Hint, punya ${stokHint}`);
+    // Extra Time hanya berguna kalau ada timer (P-04).
+    waktu.hidden = !modeRanked;
+    waktu.setAttribute('aria-disabled', stokWaktu > 0 && !sesi.selesai ? 'false' : 'true');
+    waktu.setAttribute('aria-label', `Extra Time, punya ${stokWaktu}`);
+  }
+
+  function tolakItem(nama, tombol) {
+    suara.tolak();
+    getar(10);
+    E.guncang(tombol, 260);
+    pesanMelayang(`${nama} habis. Beli di Toko.`, 'peringatan');
+  }
+
+  function pakaiHintSolo() {
+    if (!sesi || sesi.selesai || gestur) return;
+    if (progres.barang.hint <= 0) {
+      tolakItem('Hint', $('tombol-hint'));
+      return;
+    }
+    // Item baru terpakai kalau ada kartu yang benar-benar dibuka.
+    if (!ubahPapan(() => P.bukaPetunjuk(sesi))) {
+      pesanMelayang('Tidak ada kartu yang perlu dibuka', 'info');
+      return;
+    }
+    R.pakai(progres, 'hint');
+    if (modeRanked) pakaiHint = true;
+    simpanProgres();
+    suara.item();
+    getar(12);
+    gambarItemSolo();
+    pesanMelayang('Satu kartu dibuka', 'info', modeRanked ? 'Hadiah maksimal 2 ⭐' : null);
+  }
+
+  function pakaiWaktuSolo() {
+    if (!rankedBerjalan()) return;
+    if (sisaRanked() <= 0) {
+      gagalRankedSolo();
+      return;
+    }
+    if (progres.barang.waktu <= 0) {
+      tolakItem('Extra Time', $('tombol-waktu'));
+      return;
+    }
+    R.pakai(progres, 'waktu');
+    pakaiWaktu = true;
+    batasRanked += R.TAMBAHAN_WAKTU_MS;
+    simpanProgres();
+    suara.item();
+    getar(12);
+    gambarItemSolo();
+    detakRanked();
+    pesanMelayang(`+${R.TAMBAHAN_WAKTU_MS / 1000} detik`, 'info', 'Hadiah maksimal 2 ⭐');
+  }
+
+  function bukaPilihMode(nomor) {
+    levelPilihan = nomor;
+    gambarPilihMode();
+    bukaOverlay($('dialog-mode'), tombolLevel[nomor - 1]);
+    const ranked = $('tombol-mode-ranked');
+    (ranked.disabled ? $('tombol-mode-practice') : ranked).focus();
+    clearInterval(idIntervalMode);
+    idIntervalMode = setInterval(gambarPilihMode, 1000);
+  }
+
+  function tutupPilihMode() {
+    clearInterval(idIntervalMode);
+    tutupOverlay($('dialog-mode'));
+  }
+
+  function batalPilihMode() {
+    tutupPilihMode();
+    tombolLevel[levelPilihan - 1].focus();
+  }
+
+  function pilihMode(mode) {
+    const asal = tengahDari(tombolLevel[levelPilihan - 1].getBoundingClientRect());
+    if (mulaiLevel(levelPilihan, asal, mode)) tutupPilihMode();
+    else gambarPilihMode();
+  }
+
+  /* Tantangan. Di kode masih bernama ranked. */
+  let modeRanked = false;
+  let batasRanked = 0;
+  let durasiRanked = 0;
+  let detikRanked = null;
+  let idBingkaiRanked = null;
+
+  const sisaRanked = () => batasRanked - performance.now();
+  const rankedBerjalan = () => modeRanked && sesi !== null && !sesi.selesai;
+
+  function mulaiTimerRanked(durasi) {
+    durasiRanked = durasi;
+    batasRanked = performance.now() + durasi;
+    detikRanked = null;
+    const putaran = () => {
+      detakRanked();
+      if (idBingkaiRanked !== null) idBingkaiRanked = requestAnimationFrame(putaran);
+    };
+    idBingkaiRanked = requestAnimationFrame(putaran);
+    detakRanked();
+  }
+
+  function hentikanTimerRanked() {
+    cancelAnimationFrame(idBingkaiRanked);
+    idBingkaiRanked = null;
+    $('timer-solo').classList.remove('gawat', 'hampir');
+    $('judul-level').classList.remove('gawat');
+  }
+
+  // Dihitung dari batas waktu, bukan jumlah bingkai, jadi waktu tetap berjalan
+  // saat tab tidak aktif dan langsung terbaca begitu pemain kembali.
+  function detakRanked() {
+    const sisa = sisaRanked();
+    if (sisa <= 0) {
+      gagalRankedSolo();
+      return;
+    }
+    const timer = $('timer-solo');
+    timer.firstElementChild.style.transform = `scaleX(${Math.min(1, sisa / durasiRanked)})`;
+    timer.classList.toggle('hampir', sisa < 30000);
+    timer.classList.toggle('gawat', sisa < 10000);
+    $('judul-level').classList.toggle('gawat', sisa < 10000);
+    const detik = Math.ceil(sisa / 1000);
+    if (detik !== detikRanked) {
+      detikRanked = detik;
+      $('judul-level').textContent = `Level ${levelAktif.level} · ${formatWaktu(detik)}`;
+      if (detik <= 10) suara.detik();
+    }
+  }
+
+  function tampilkanPenalti() {
+    pesanMelayang(`−${R.PENALTI_MS / 1000} detik`, 'penalti');
+  }
+
+  // G-09: kunci salah memotong waktu. Letak kesalahan tidak ditunjukkan.
+  function salahRanked() {
+    batasRanked -= R.PENALTI_MS;
+    if (sisaRanked() <= 0) {
+      gagalRankedSolo();
+      return;
+    }
+    suara.salah();
+    getar([30, 40, 30]);
+    pesanSementara = { teks: 'Jawaban belum benar.', salah: true };
+    gambarSolo();
+    detakRanked();
+    tampilkanPenalti();
+    E.guncang($('papan'), 340);
+    G.gerakkan($('pesan-solo')).set({ y: 12, buram: 0 });
+    G.gerakkan($('pesan-solo')).ke({ y: 0, buram: 1 }, PEGAS.pilih);
+  }
+
+  function menangRankedSolo() {
+    const sisa = sisaRanked();
+    hentikanTimerRanked();
+    const stars = R.nilaiStars(sisa, durasiRanked, { hint: pakaiHint, waktu: pakaiWaktu });
+    const pakaiBantuan = pakaiHint || pakaiWaktu;
+    const durasi = durasiRanked;
+    const nomor = levelAktif.level;
+    const kunciSebelum = LEVEL.map((l) => l.level).filter((n) => !R.levelTerbuka(progres, n));
+    // Hasil disimpan sebelum animasi apa pun, jadi animasi tidak bisa mengubahnya.
+    const { tambah, rekorBaru } = R.menangRanked(progres, nomor, stars);
+    simpanProgres();
+    if (rekorBaru) levelBaruSelesai = nomor;
+    const baruBuka = kunciSebelum.filter((n) => R.levelTerbuka(progres, n));
+    const bukaChapter = baruBuka.find((n) => R.AMBANG_CHAPTER[n]);
+    if (baruBuka.length) levelBaruTerbuka = bukaChapter || baruBuka[0];
+    const syaratBerikut = nomor < LEVEL.length ? R.syaratLevel(progres, nomor + 1) : null;
+    let kabarBuka = null;
+    if (bukaChapter) kabarBuka = `Chapter ${LEVEL[bukaChapter - 1].chapter} terbuka`;
+    else if (baruBuka.length) kabarBuka = `Level ${baruBuka[0]} terbuka`;
+    else if (syaratBerikut && syaratBerikut.jenis === 'stars') kabarBuka = `Butuh ${syaratBerikut.butuh}\u00a0⭐ untuk Chapter ${LEVEL[nomor].chapter}`;
+    suara.benar();
+    gambarSolo();
+    efekBenarSolo();
+    pesanMelayang(
+      tambah > 0 ? `Rekor baru! +${tambah} ⭐` : 'Level selesai!',
+      'perayaan',
+      kabarBuka,
+    );
+    const { kunciSalah } = sesi;
+    const sisaDetik = Math.ceil(sisa / 1000);
+    const rekor = progres.rekor[nomor];
+    const hadiah = tambah > 0
+      ? `+${tambah}\u00a0⭐ · Star Wallet ${progres.wallet}\u00a0⭐`
+      : `Rekor tetap ${'⭐'.repeat(rekor)}`;
+    const target = rekor + 1;
+    const saran = target <= 3
+      ? `Sisa waktu minimal ${formatWaktu(R.syaratStarsMs(target, durasi) / 1000)}${pakaiBantuan && target === 3 ? ' tanpa bantuan' : ''} untuk ${target}\u00a0⭐`
+      : null;
+    tunda(jedaSolo, () => {
+      bukaHasil({
+        judul: `Level ${nomor} selesai!`,
+        stars,
+        hadiah,
+        hadiahTetap: tambah === 0,
+        saran,
+        lanjut: lanjutanTantangan(),
+      });
+      hitungNaik($('detail-hasil'), sisaDetik, (d) => `Sisa waktu ${formatWaktu(d)} · Kunci salah ${kunciSalah} kali`);
+    }, G.kurangi() ? 500 : JEDA_MENANG_SOLO_MS);
+  }
+
+  // Angka menghitung naik, lalu berhenti tepat di hasil sebenarnya.
+  let putaranHitung = 0;
+
+  function hitungNaik(el, nilai, teks) {
+    const putaran = ++putaranHitung;
+    if (G.kurangi()) {
+      el.textContent = teks(nilai);
+      return;
+    }
+    const mulai = performance.now();
+    const lama = 650;
+    const langkah = (t) => {
+      if (putaran !== putaranHitung) return;
+      const p = Math.min(Math.max(t - mulai, 0) / lama, 1);
+      el.textContent = teks(Math.round(nilai * (1 - (1 - p) ** 3)));
+      if (p < 1) requestAnimationFrame(langkah);
+    };
+    el.textContent = teks(0);
+    requestAnimationFrame(langkah);
+  }
+
+  // Stars muncul satu per satu. Tombol hasil tetap bisa ditekan selama animasi berjalan.
+  function mainkanStarsHasil() {
+    [...$('stars-hasil').querySelectorAll('.dapat')].forEach((el, n) => {
+      const g = G.gerakkan(el);
+      g.set({ skala: 0.2, buram: 0 });
+      tunda(jedaSolo, () => {
+        g.ke({ skala: 1, buram: 1 }, { redaman: 0.5, respons: 0.38 });
+        suara.star(n);
+        getar(10);
+        const c = tengahDari(el.getBoundingClientRect());
+        E.semburan(c.x, c.y, { warna: ['#fae242', '#ffffff'], jumlah: 12, laju: 260 });
+      }, 220 + n * 280);
+    });
+  }
+
+  // Satu nyawa terlihat hilang, supaya jelas apa yang berkurang.
+  function mainkanNyawaHilang() {
+    const el = $('nyawa-hasil').querySelector('.hilang');
+    if (!el) return;
+    tunda(jedaSolo, () => {
+      el.classList.add('kosong');
+      G.gerakkan(el).dorong({ skala: -3, y: 180 }, PEGAS.pipih);
+      suara.nyawaHilang();
+      getar(15);
+    }, G.kurangi() ? 0 : 420);
+  }
+
+  // Waktu habis. Nyawanya sudah dipotong saat mulai, jadi tidak ada yang dikembalikan.
+  function gagalRankedSolo() {
+    if (!rankedBerjalan()) return;
+    hentikanTimerRanked();
+    const g = gestur;
+    gestur = null;
+    if (g && g.aktif) selesaikanSeret(g, performance.now(), true);
+    P.akhiriSesi(sesi);
+    R.gagalRanked(progres);
+    simpanProgres();
+    tutupOverlay($('dialog-keluar'));
+    suara.salah();
+    getar([30, 40, 30]);
+    $('timer-solo').firstElementChild.style.transform = 'scaleX(0)';
+    $('judul-level').textContent = `Level ${levelAktif.level} · ${formatWaktu(0)}`;
+    pesanSementara = { teks: 'Waktu habis.', salah: true };
+    pesanMelayang('Waktu habis!', 'penalti');
+    gambarSolo();
+    E.guncang($('papan'), 420);
+    tunda(jedaSolo, tampilkanGagalRanked, G.kurangi() ? 300 : 700);
+  }
+
+  function tampilkanGagalRanked() {
+    putaranHitung += 1;
+    const sisaPulih = R.sisaPulihMs(progres, Date.now());
+    const adaNyawa = progres.nyawa > 0;
+    $('detail-hasil').textContent = adaNyawa
+      ? `1 nyawa hilang. Sisa nyawa ${progres.nyawa}/${progres.nyawaMaks}.`
+      : `Nyawa habis. Nyawa berikutnya pulih dalam ${formatWaktu(Math.ceil(sisaPulih / 1000))}. Practice tetap bisa dimainkan.`;
+    bukaHasil({ judul: 'Waktu habis', gagal: true, nyawaHilang: true, ulang: adaNyawa ? 'Coba lagi' : null, practice: true });
+  }
+
+  function keluarRanked() {
+    tutupOverlay($('dialog-keluar'));
+    if (!rankedBerjalan()) return;
+    R.gagalRanked(progres);
+    simpanProgres();
+    kembaliKePeta();
+  }
+
+  function keluarSolo() {
+    if (rankedBerjalan()) bukaDialogKeluar('ranked');
+    else kembaliKePeta();
+  }
+
+  // lanjut: { label, aksi } untuk tombol utama, atau null kalau tidak ada langkah berikutnya.
+  function bukaHasil({
+    judul, gagal = false, stars = 0, hadiah = null, hadiahTetap = false, saran = null,
+    nyawaHilang = false, ulang = 'Ulangi', practice = false, lanjut = null,
+  }) {
+    const judulEl = $('judul-hasil');
+    judulEl.textContent = judul;
+    judulEl.classList.toggle('gagal', gagal);
+
+    const bintang = $('stars-hasil');
+    bintang.hidden = stars === 0;
+    bintang.innerHTML = [1, 2, 3].map((n) => `<span class="star-hasil ${n <= stars ? 'dapat' : 'kosong'}">⭐</span>`).join('');
+    bintang.setAttribute('aria-label', `${stars} dari 3 Stars`);
+
+    const hadiahEl = $('hadiah-hasil');
+    hadiahEl.hidden = !hadiah;
+    hadiahEl.textContent = hadiah || '';
+    hadiahEl.classList.toggle('tetap', hadiahTetap);
+    $('saran-hasil').hidden = !saran;
+    $('saran-hasil').textContent = saran || '';
+
+    // Kapasitas nyawa yang sangat besar tidak muat sebagai deretan ikon, dan teksnya sudah cukup.
+    const wadahNyawa = $('nyawa-hasil');
+    wadahNyawa.hidden = !nyawaHilang || progres.nyawaMaks > 10;
+    wadahNyawa.innerHTML = '';
+    if (!wadahNyawa.hidden) {
+      for (let n = 0; n < progres.nyawaMaks; n++) {
+        const kelas = n < progres.nyawa ? '' : n === progres.nyawa ? 'hilang' : 'kosong';
+        wadahNyawa.insertAdjacentHTML('beforeend', `<span class="nyawa-ikon ${kelas}">❤️</span>`);
+      }
+      wadahNyawa.setAttribute('aria-label', `Sisa nyawa ${progres.nyawa} dari ${progres.nyawaMaks}`);
+    }
+
+    const tombolLanjut = $('tombol-level-lanjut');
+    const tombolUlang = $('tombol-level-ulang');
+    const tombolPractice = $('tombol-level-practice');
+    tombolLanjut.hidden = !lanjut;
+    aksiLanjut = lanjut ? lanjut.aksi : null;
+    if (lanjut) tombolLanjut.textContent = lanjut.label;
+    tombolUlang.hidden = !ulang;
+    if (ulang) tombolUlang.textContent = ulang;
+    tombolUlang.classList.toggle('utama', gagal);
+    tombolPractice.hidden = !practice;
+    tombolPractice.classList.toggle('utama', gagal && !ulang);
+
+    bukaOverlay($('layar-hasil'));
+    tutupToastYangMenimpa($('layar-hasil').querySelector('.kotak-kaca'));
+    const fokus = lanjut ? 'tombol-level-lanjut' : gagal ? (ulang ? 'tombol-level-ulang' : 'tombol-level-practice') : 'tombol-level-peta';
+    $(fokus).focus();
+    if (stars > 0) mainkanStarsHasil();
+    if (nyawaHilang) mainkanNyawaHilang();
+  }
+
+  // Sesudah Tantangan, level berikutnya lewat Pilih Mode, supaya pemain bisa latihan dulu.
+  function lanjutanTantangan() {
+    const berikut = levelAktif.level + 1;
+    if (berikut > LEVEL.length || !levelBisaDibuka(berikut)) return null;
+    return {
+      label: 'Level berikutnya',
+      aksi: () => {
+        kembaliKePeta();
+        bukaPilihMode(berikut);
+      },
+    };
+  }
+
+  // Sesudah Practice: lanjut kalau level berikutnya terbuka. Kalau belum, Tantangan level ini
+  // adalah satu-satunya cara membukanya, jadi itu yang ditawarkan.
+  function lanjutanPractice() {
+    const nomor = levelAktif.level;
+    if (nomor < LEVEL.length && levelBisaDibuka(nomor + 1)) {
+      return { label: 'Level berikutnya', aksi: () => mulaiLevel(nomor + 1) };
+    }
+    if (R.levelTerbuka(progres, nomor) && !progres.rekor[nomor]) {
+      return { label: 'Main Tantangan', aksi: () => mulaiDariHasil('ranked') };
+    }
+    return null;
+  }
+
+  // Kalau ditolak karena nyawa habis, Pilih Mode menjelaskan alasannya.
+  function mulaiDariHasil(mode) {
+    const nomor = levelAktif.level;
+    if (mulaiLevel(nomor, null, mode)) return;
+    kembaliKePeta();
+    bukaPilihMode(nomor);
+  }
+
+  function ulangiLevel() {
+    mulaiDariHasil(modeRanked ? 'ranked' : 'practice');
+  }
+
+  function mainkanMasukPapan() {
+    slotEl.forEach((b, i) => {
+      G.gerakkan(b).set({ skala: 0.72, buram: 0 });
+      G.gerakkan(b).ke({ skala: 1, buram: 1 }, { ...PEGAS.bagi, tunda: 80 + i * 28 });
+    });
+    sediaEl.forEach((b, n) => {
+      G.gerakkan(b).set({ y: 22, buram: 0 });
+      G.gerakkan(b).ke({ y: 0, buram: 1 }, { ...PEGAS.bagi, tunda: 240 + n * 30 });
+    });
+  }
+
+  function labelSlot(i) {
+    const posisi = `Baris ${Math.floor(i / 3) + 1} kolom ${(i % 3) + 1}`;
+    const k = sesi.papan[i];
+    if (k === null) return `${posisi}, kosong`;
+    return `${posisi}, ${namaKartu(P.DEK[k])}${sesi.tetap[i] ? ', petunjuk' : ''}`;
+  }
+
+  // Ranked hanya memberi tahu bahwa jawaban belum benar, tanpa letak kesalahannya.
+  const garisTerlihat = () => (modeRanked ? [] : sesi.gagal);
+
+  function teksPesanSolo() {
+    const gagal = garisTerlihat();
+    if (gagal.length) {
+      const daftar = gagal.slice(0, 3).map((g) => `${g.nama} (${g.sifat.join(', ')})`).join(', ');
+      const lebih = gagal.length > 3 ? ` dan ${gagal.length - 3} garis lain` : '';
+      return `Belum rasi: ${daftar}${lebih}`;
+    }
+    if (pesanSementara) return pesanSementara.teks;
+    if (sesi.terpilih !== null) return 'Sekarang ketuk slot untuk kartu ini.';
+    if (modeRanked) return 'Susun papan sebelum waktu habis.';
+    return levelAktif.pesan || 'Setiap baris dan kolom harus jadi rasi.';
+  }
+
+  // SVG hanya ditulis ulang kalau kartunya berubah, supaya animasi tidak terhapus.
+  function gambarSolo() {
+    const slotGagal = new Set(garisTerlihat().flatMap((g) => g.slot));
+    sesi.papan.forEach((k, i) => {
+      const b = slotEl[i];
+      if (idSlot[i] !== k) {
+        b.innerHTML = k === null ? '' : svgKartu(P.DEK[k]);
+        idSlot[i] = k;
+      }
+      b.classList.toggle('kosong', k === null);
+      b.classList.toggle('terisi', k !== null && !sesi.tetap[i]);
+      b.classList.toggle('tetap', sesi.tetap[i]);
+      b.classList.toggle('siap', k === null && sesi.terpilih !== null);
+      b.classList.toggle('gagal', slotGagal.has(i));
+      b.classList.toggle('benar', sesi.selesai && !sesi.kalah);
+      // Slot petunjuk tetap menerima sentuhan, supaya bisa memberi tahu bahwa ia terkunci.
+      b.disabled = sesi.selesai;
+      b.setAttribute('aria-disabled', sesi.tetap[i] ? 'true' : 'false');
+      b.setAttribute('aria-label', labelSlot(i));
+    });
+    sesi.tersedia.forEach((id, n) => {
+      const dipakai = P.kartuDipakai(sesi, id);
+      if (sediaEl[n].classList.contains('tertutup') && !P.kartuTertutup(sesi, id)) bukaKartuTertutup(sediaEl[n], id, dipakai);
+      sediaEl[n].classList.toggle('terpakai', dipakai);
+      sediaEl[n].classList.toggle('dipilih', sesi.terpilih === id);
+      sediaEl[n].disabled = dipakai || sesi.selesai;
+      sediaEl[n].setAttribute('aria-pressed', sesi.terpilih === id ? 'true' : 'false');
+    });
+    $('pesan-solo').textContent = teksPesanSolo();
+    $('pesan-solo').classList.toggle('salah', garisTerlihat().length > 0 || (pesanSementara !== null && pesanSementara.salah === true));
+
+    const tombol = $('tombol-kunci');
+    const siap = !sesi.papan.includes(null) && !sesi.selesai;
+    tombol.setAttribute('aria-disabled', siap ? 'false' : 'true');
+    if (siap && !kunciSiapTampil) {
+      picu(tombol, 'bangun', 760);
+      G.gerakkan(tombol).dorong({ skala: 1.6 }, PEGAS.tombol);
+    }
+    kunciSiapTampil = siap;
+    gambarItemSolo();
+  }
+
+  function hapusSorot() {
+    $('papan').querySelectorAll('.garis-sorot').forEach((el) => el.remove());
+  }
+
+  // Semua perubahan papan lewat sini, supaya ketuk dan seret sama rasanya.
+  function ubahPapan(perubahan, kecuali = null, jeda = 0) {
+    const sebelum = sesi.papan.slice();
+    if (!perubahan()) return false;
+    pesanSementara = null;
+    hapusSorot();
+    gambarSolo();
+    terbangkanPerubahan(sebelum, kecuali, jeda);
+    return true;
+  }
+
+  function terbangkanPerubahan(sebelum, kecuali, jeda) {
+    let urutan = 0;
+    new Set([...sebelum, ...sesi.papan]).forEach((id) => {
+      if (id === null || id === kecuali) return;
+      const dari = sebelum.indexOf(id);
+      const ke = sesi.papan.indexOf(id);
+      if (dari === ke) return;
+      const n = sesi.tersedia.indexOf(id);
+      const elAsal = dari >= 0 ? slotEl[dari] : sediaEl[n];
+      terbang(id, ke >= 0 ? { slot: ke } : { sedia: n }, {
+        rectAsal: elAsal.getBoundingClientRect(),
+        senyap: kecuali !== null || urutan > 0,
+        tunda: urutan * jeda,
+      });
+      urutan += 1;
+    });
+  }
+
+  // Kartu membalik saat terbuka. Label pembaca layar langsung diganti.
+  function bukaKartuTertutup(el, id, dipakai) {
+    el.classList.remove('tertutup');
+    el.setAttribute('aria-label', namaKartu(P.DEK[id]));
+    if (dipakai) {
+      el.innerHTML = svgKartu(P.DEK[id]);
+      return;
+    }
+    if (G.kurangi()) {
+      el.innerHTML = svgKartu(P.DEK[id]);
+    } else {
+      const g = G.gerakkan(el);
+      g.saatLangkah = () => {
+        if (g.nilai('sx') > 0.12) return;
+        g.saatLangkah = null;
+        el.innerHTML = svgKartu(P.DEK[id]);
+        g.ke({ sx: 1 }, PEGAS.pilih);
+      };
+      g.ke({ sx: 0 }, { redaman: 1, respons: 0.12 });
+    }
+    suara.item();
+    getar(12);
+    pesanMelayang('Rasi terbentuk, kartu terbuka', 'info');
+  }
+
+  function tolakTertutup(id) {
+    const el = sediaEl[sesi.tersedia.indexOf(id)];
+    suara.tolak();
+    getar(10);
+    G.gerakkan(el).dorong({ x: 220 }, PEGAS.goyang);
+    pesanSementara = { teks: 'Bentuk rasi di papan untuk membuka kartu ini.' };
+    pesanMelayang('Kartu masih tertutup', 'peringatan');
+    gambarSolo();
+  }
+
+  function tekanKartuSolo(id) {
+    if (!sesi) return;
+    if (P.kartuTertutup(sesi, id)) {
+      tolakTertutup(id);
+      return;
+    }
+    if (!P.tekanKartu(sesi, id)) return;
+    pesanSementara = null;
+    suara.pilih();
+    getar(6);
+    gambarSolo();
+  }
+
+  function tekanSlotSolo(i) {
+    if (!sesi) return;
+    if (sesi.tetap[i]) {
+      tolakPetunjuk(i);
+      return;
+    }
+    if (sesi.terpilih === null && sesi.papan[i] === null) {
+      pesanSementara = { teks: 'Seret kartu ke sini, atau ketuk kartunya dulu.' };
+      gambarSolo();
+      return;
+    }
+    ubahPapan(() => P.tekanSlot(sesi, i));
+  }
+
+  function tolakPetunjuk(i) {
+    const b = slotEl[i];
+    suara.tolak();
+    getar(10);
+    G.gerakkan(b).dorong({ x: 260 }, PEGAS.goyang);
+    b.querySelectorAll('.gembok').forEach((el) => el.remove());
+    b.insertAdjacentHTML('beforeend', `<svg class="gembok" viewBox="0 0 24 24" aria-hidden="true"><path d="${JALUR_GEMBOK}"/></svg>`);
+    const gembok = b.lastElementChild;
+    setTimeout(() => gembok.remove(), 720);
+    pesanSementara = { teks: 'Kartu petunjuk tidak bisa dipindah.' };
+    pesanMelayang('Kartu petunjuk terkunci', 'peringatan');
+    gambarSolo();
+  }
+
+  /* Kartu terbang */
+  const lebarHantu = () => slotEl[0].offsetWidth;
+
+  function elemenTempat(tempat) {
+    return tempat.slot !== undefined ? slotEl[tempat.slot] : sediaEl[tempat.sedia];
+  }
+
+  function tahan(el) {
+    el.dataset.tunggu = String(Number(el.dataset.tunggu || 0) + 1);
+    el.classList.add('menunggu');
+  }
+
+  function lepasTahan(el) {
+    const sisa = Number(el.dataset.tunggu || 0) - 1;
+    if (sisa > 0) {
+      el.dataset.tunggu = String(sisa);
+      return;
+    }
+    delete el.dataset.tunggu;
+    el.classList.remove('menunggu');
+  }
+
+  function buatHantuKartu(id, rect) {
+    const el = buatHantu(svgKartu(P.DEK[id]), rect, lebarHantu());
+    el.addEventListener('pointerdown', (e) => tangkapHantu(e, el));
+    return el;
+  }
+
+  // Tangga nada selalu dibentang dari do ke do tinggi, berapa pun slot yang harus diisi,
+  // jadi kartu terakhir selalu jatuh di do tinggi. Petunjuk awal tidak dihitung.
+  function langkahTangga() {
+    const awal = (modeRanked ? levelAktif.ranked : levelAktif.practice).papan;
+    const slotMain = awal.filter((k) => k === null).length;
+    const terisi = sesi ? sesi.papan.filter((k, i) => k !== null && awal[i] === null).length : 0;
+    const puncak = TANGGA.length - 1;
+    const nomor = slotMain > 1 ? Math.round((Math.max(terisi - 1, 0) / (slotMain - 1)) * puncak) : puncak;
+    return { nomor, penuh: terisi === slotMain };
+  }
+
+  function mendarat(f, titik, senyap) {
+    const m = G.gerakkan(f.hantu);
+    const { nomor, penuh } = langkahTangga();
+    if (f.tempat.slot === undefined) {
+      if (!senyap) suara.turun(nomor);
+      return;
+    }
+    m.dorong({ sx: 2.4, sy: -2.4 }, PEGAS.pipih);
+    if (senyap) return;
+    suara.tak(nomor, penuh);
+    getar(12);
+    E.semburan(titik.x, titik.y, { warna: [WARNA[P.DEK[f.id].warna].hex, '#ffffff'], jumlah: 14, laju: 300 });
+  }
+
+  function selesaiTerbang(f) {
+    terbangan.delete(f);
+    buangHantu(f.hantu);
+    lepasTahan(f.el);
+  }
+
+  // Keadaan permainan sudah berubah sebelum fungsi ini dipanggil.
+  // Kartu aslinya baru terlihat saat hantunya tiba.
+  function terbang(id, tempat, { hantu = null, rectAsal = null, kecepatan = null, tunda: jeda = 0, senyap = false } = {}) {
+    const el = elemenTempat(tempat);
+    tahan(el);
+    const h = hantu || buatHantuKartu(id, rectAsal);
+    h.classList.remove('diseret');
+    const lebar = lebarHantu();
+    const c = tengahDari(el.getBoundingClientRect());
+    const x = c.x - lebar / 2;
+    const y = c.y - lebar * 0.7;
+    const f = { hantu: h, id, tempat, el, tiba: false };
+    terbangan.add(f);
+    const m = G.gerakkan(h);
+    m.saatLangkah = () => {
+      if (f.tiba || Math.hypot(m.nilai('x') - x, m.nilai('y') - y) > 7) return;
+      f.tiba = true;
+      mendarat(f, c, senyap);
+    };
+    m.ke({ x, y }, {
+      ...PEGAS.mendarat,
+      kecepatan: kecepatan || undefined,
+      tunda: jeda,
+      selesai: () => selesaiTerbang(f),
+    });
+    m.ke({ skala: el.offsetWidth / lebar, putar: 0 }, { ...PEGAS.angkat, tunda: jeda });
+  }
+
+  /* Seret */
+  function sumberSlot(i) {
+    const k = sesi.papan[i];
+    if (k === null) return null;
+    return sesi.tetap[i] ? { tetap: true, slot: i } : { slot: i, id: k };
+  }
+
+  function pasangTekanKartu(b, ambilSumber) {
+    b.addEventListener('pointerdown', (e) => {
+      abaikanKlik = false;
+      if (gestur || e.button !== 0 || !sesi || sesi.selesai) return;
+      const sumber = ambilSumber();
+      if (!sumber) return;
+      gestur = {
+        id: e.pointerId,
+        aktif: false,
+        el: b,
+        sumber,
+        idKartu: sumber.id,
+        x: e.clientX,
+        y: e.clientY,
+        mulaiX: e.clientX,
+        mulaiY: e.clientY,
+        riwayat: [{ x: e.clientX, y: e.clientY, t: e.timeStamp }],
+        tujuan: null,
+      };
+    });
+  }
+
+  function siapkanSasaran(g) {
+    g.sasaran = slotEl.flatMap((b, i) => {
+      if (sesi.tetap[i]) return [];
+      return [{ i, ...tengahDari(b.getBoundingClientRect()) }];
+    });
+    g.radius = lebarHantu() * 0.75;
+    g.papan = $('papan').getBoundingClientRect();
+  }
+
+  function mulaiSeret(g) {
+    g.aktif = true;
+    abaikanKlik = true;
+    g.el.classList.remove('ditekan');
+    try { g.el.setPointerCapture(g.id); } catch (e) {}
+    const rect = g.el.getBoundingClientRect();
+    const lebar = lebarHantu();
+    const c = tengahDari(rect);
+    g.hantu = buatHantuKartu(g.idKartu, rect);
+    g.hantu.classList.add('diseret');
+    g.skalaPegang = rect.width / lebar;
+    g.skalaSumber = g.el.offsetWidth / lebar;
+    g.ox = g.mulaiX - c.x;
+    g.oy = g.mulaiY - c.y;
+    g.el.classList.add('asal');
+    siapkanSasaran(g);
+    suara.ambil();
+    getar(10);
+    G.gerakkan(g.hantu).ke({ skala: g.skalaSumber * 1.18 }, PEGAS.angkat);
+    requestAnimationFrame(bingkaiSeret);
+  }
+
+  // Kartu yang masih terbang bisa ditangkap dan diseret lagi dari posisinya saat itu.
+  function tangkapHantu(e, el) {
+    if (gestur || e.button !== 0 || !sesi || sesi.selesai) return;
+    const f = [...terbangan].find((x) => x.hantu === el);
+    if (!f) return;
+    e.preventDefault();
+    terbangan.delete(f);
+    const m = G.gerakkan(el);
+    m.batalSelesai();
+    m.saatLangkah = null;
+    m.set({ sx: 1, sy: 1 });
+    abaikanKlik = true;
+    const lebar = lebarHantu();
+    const cx = m.nilai('x') + lebar / 2;
+    const cy = m.nilai('y') + lebar * 0.7;
+    gestur = {
+      id: e.pointerId,
+      aktif: true,
+      tertangkap: true,
+      el: f.el,
+      sumber: f.tempat,
+      idKartu: f.id,
+      hantu: el,
+      x: e.clientX,
+      y: e.clientY,
+      riwayat: [{ x: e.clientX, y: e.clientY, t: e.timeStamp }],
+      tujuan: null,
+      skalaPegang: m.nilai('skala'),
+      skalaSumber: f.el.offsetWidth / lebar,
+      ox: e.clientX - cx,
+      oy: e.clientY - cy,
+    };
+    el.classList.add('diseret');
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+    siapkanSasaran(gestur);
+    suara.ambil();
+    getar(10);
+    perbaruiSeret(gestur);
+    requestAnimationFrame(bingkaiSeret);
+  }
+
+  function slotTerdekat(g, x, y) {
+    let hasil = null;
+    for (const t of g.sasaran) {
+      const jarak = Math.hypot(t.x - x, t.y - y);
+      if (jarak <= g.radius && (!hasil || jarak < hasil.jarak)) hasil = { ...t, jarak };
+    }
+    return hasil;
+  }
+
+  function jarakKePapan(g, x, y) {
+    const dx = Math.max(g.papan.left - x, 0, x - g.papan.right);
+    const dy = Math.max(g.papan.top - y, 0, y - g.papan.bottom);
+    return Math.hypot(dx, dy);
+  }
+
+  function aturTujuan(g, i) {
+    if (g.tujuan === i) return;
+    if (g.tujuan !== null) {
+      const lama = slotEl[g.tujuan];
+      lama.classList.remove('tujuan');
+      lama.querySelectorAll('.samar').forEach((el) => el.remove());
+      G.gerakkan(lama).ke({ skala: 1 }, PEGAS.sorot);
+    }
+    g.tujuan = i;
+    if (i === null) return;
+    const b = slotEl[i];
+    b.classList.add('tujuan');
+    if (sesi.papan[i] === null) {
+      b.insertAdjacentHTML('beforeend', svgKartu(P.DEK[g.idKartu]));
+      b.lastElementChild.classList.add('samar');
+    }
+    G.gerakkan(b).ke({ skala: 1.04 }, PEGAS.sorot);
+    suara.magnet();
+    getar(5);
+  }
+
+  function karetSumbu(c, min, maks, ukuran) {
+    if (c < min) return min - G.karet(min - c, ukuran);
+    if (c > maks) return maks + G.karet(c - maks, ukuran);
+    return c;
+  }
+
+  function perbaruiSeret(g) {
+    const m = G.gerakkan(g.hantu);
+    const lebar = lebarHantu();
+    const tinggi = lebar * 1.4;
+    const skala = m.nilai('skala');
+    const rasio = skala / g.skalaPegang;
+    let cx = g.x - g.ox * rasio;
+    let cy = g.y - g.oy * rasio;
+    const sisiX = (lebar * skala) / 4;
+    const sisiY = (tinggi * skala) / 4;
+    cx = karetSumbu(cx, sisiX, window.innerWidth - sisiX, window.innerWidth * 0.25);
+    cy = karetSumbu(cy, sisiY, window.innerHeight - sisiY, window.innerHeight * 0.25);
+
+    const dekat = slotTerdekat(g, cx, cy);
+    const bisa = dekat && dekat.i !== g.sumber.slot;
+    aturTujuan(g, bisa ? dekat.i : null);
+    if (bisa) {
+      const tarik = 0.22 * (1 - dekat.jarak / g.radius);
+      cx += (dekat.x - cx) * tarik;
+      cy += (dekat.y - cy) * tarik;
+    }
+    g.cx = cx;
+    g.cy = cy;
+    m.set({ x: cx - lebar / 2, y: cy - tinggi / 2 });
+
+    // Kartu dari kartu tersedia membesar ke ukuran slot saat mendekati papan.
+    let skalaSasaran = 1.05;
+    if (g.sumber.slot === undefined) {
+      const dekatPapan = batas(1 - jarakKePapan(g, cx, cy) / (tinggi * 0.9), 0, 1);
+      skalaSasaran = campur(g.skalaSumber * 1.18, 1.05, dekatPapan);
+    }
+    if (Math.abs(skalaSasaran - m.target('skala')) > 0.004) m.ke({ skala: skalaSasaran }, PEGAS.angkat);
+
+    const v = G.kecepatan(g.riwayat, performance.now());
+    const miring = G.kurangi() ? 0 : batas(v.x * 0.012, -12, 12);
+    if (Math.abs(miring - m.target('putar')) > 0.25) m.ke({ putar: miring }, PEGAS.miring);
+  }
+
+  function bingkaiSeret() {
+    if (!gestur || !gestur.aktif) return;
+    perbaruiSeret(gestur);
+    requestAnimationFrame(bingkaiSeret);
+  }
+
+  function gerakSeret(e) {
+    const g = gestur;
+    if (!g || e.pointerId !== g.id) return;
+    g.x = e.clientX;
+    g.y = e.clientY;
+    g.riwayat.push({ x: g.x, y: g.y, t: e.timeStamp });
+    if (g.riwayat.length > 14) g.riwayat.shift();
+    if (!g.aktif) {
+      if (Math.hypot(g.x - g.mulaiX, g.y - g.mulaiY) < AMBANG_SERET_PX) return;
+      if (g.sumber.tetap) {
+        abaikanKlik = true;
+        gestur = null;
+        tolakPetunjuk(g.sumber.slot);
+        return;
+      }
+      mulaiSeret(g);
+    }
+    perbaruiSeret(g);
+  }
+
+  // Tujuan dibaca dari arah lemparan. Slot kosong lebih diutamakan daripada slot terisi.
+  function pilihTujuan(g, v) {
+    const dekat = slotTerdekat(g, g.cx, g.cy);
+    if (Math.hypot(v.x, v.y) < 260) return dekat ? dekat.i : null;
+    const px = g.cx + G.proyeksi(v.x, 0.99);
+    const py = g.cy + G.proyeksi(v.y, 0.99);
+    const calon = [];
+    for (let n = 0; n <= 16; n++) {
+      const t = n / 16;
+      const d = slotTerdekat(g, campur(g.cx, px, t), campur(g.cy, py, t));
+      if (d && d.i !== g.sumber.slot && !calon.includes(d.i)) calon.push(d.i);
+    }
+    const kosong = calon.filter((i) => sesi.papan[i] === null);
+    if (kosong.length) return kosong[kosong.length - 1];
+    if (calon.length) return calon[calon.length - 1];
+    return dekat ? dekat.i : null;
+  }
+
+  function diDalamPapan(g) {
+    return jarakKePapan(g, g.cx, g.cy) === 0;
+  }
+
+  function selesaikanSeret(g, waktu, batal) {
+    aturTujuan(g, null);
+    g.el.classList.remove('asal');
+    const v = batal ? { x: 0, y: 0 } : G.kecepatan(g.riwayat, waktu);
+    const dariSlot = g.sumber.slot;
+    let tempat = g.sumber.slot !== undefined ? { slot: dariSlot } : { sedia: g.sumber.sedia };
+    if (sesi && !sesi.selesai && !batal) {
+      const tujuan = pilihTujuan(g, v);
+      if (dariSlot === undefined) {
+        if (tujuan !== null && ubahPapan(() => P.taruhKartu(sesi, g.idKartu, tujuan), g.idKartu)) {
+          tempat = { slot: tujuan };
+        }
+      } else if (tujuan !== null && tujuan !== dariSlot) {
+        if (ubahPapan(() => P.pindahKartu(sesi, dariSlot, tujuan), g.idKartu)) tempat = { slot: tujuan };
+      } else if (tujuan === null && !diDalamPapan(g)) {
+        if (ubahPapan(() => P.ambilKartu(sesi, dariSlot), g.idKartu)) {
+          tempat = { sedia: sesi.tersedia.indexOf(g.idKartu) };
+        }
+      }
+    }
+    terbang(g.idKartu, tempat, { hantu: g.hantu, kecepatan: v });
+    if (g.tertangkap) lepasTahan(g.el);
+  }
+
+  function lepasSeret(e) {
+    const g = gestur;
+    if (!g || e.pointerId !== g.id) return;
+    gestur = null;
+    if (g.aktif) selesaikanSeret(g, e.timeStamp, false);
+  }
+
+  function batalSeret(e) {
+    const g = gestur;
+    if (!g || e.pointerId !== g.id) return;
+    gestur = null;
+    if (g.aktif) selesaikanSeret(g, e.timeStamp, true);
+  }
+
+  /* Kunci jawaban */
+  function formatWaktu(detik) {
+    return `${Math.floor(detik / 60)}:${String(detik % 60).padStart(2, '0')}`;
+  }
+
+  function tolakKunci() {
+    suara.tolak();
+    getar(10);
+    E.guncang($('tombol-kunci'), 320);
+    slotEl.forEach((b, i) => { if (sesi.papan[i] === null) picu(b, 'kedip', 560); });
+    pesanSementara = { teks: 'Isi semua slot dulu.' };
+    pesanMelayang('Isi semua slot dulu', 'peringatan');
+    gambarSolo();
+  }
+
+  // Garis sorot digambar di atas papan: n adalah indeks P.GARIS.
+  function sorotGaris(n, warna) {
+    const [a, , c] = P.GARIS[n].map((i) => slotEl[i]);
+    const baris = n < 3;
+    const tepi = 10;
+    const tebal = 6;
+    const el = document.createElement('div');
+    el.className = 'garis-sorot';
+    el.style.setProperty('--warna-garis', warna);
+    if (baris) {
+      el.style.left = `${a.offsetLeft + tepi}px`;
+      el.style.top = `${a.offsetTop + a.offsetHeight / 2 - tebal / 2}px`;
+      el.style.width = `${c.offsetLeft + c.offsetWidth - a.offsetLeft - 2 * tepi}px`;
+      el.style.height = `${tebal}px`;
+      el.style.transformOrigin = 'left center';
+    } else {
+      el.style.left = `${a.offsetLeft + a.offsetWidth / 2 - tebal / 2}px`;
+      el.style.top = `${a.offsetTop + tepi}px`;
+      el.style.width = `${tebal}px`;
+      el.style.height = `${c.offsetTop + c.offsetHeight - a.offsetTop - 2 * tepi}px`;
+      el.style.transformOrigin = 'center top';
+    }
+    $('papan').appendChild(el);
+    const sumbu = baris ? 'sx' : 'sy';
+    G.gerakkan(el).set({ [sumbu]: 0 });
+    G.gerakkan(el).ke({ [sumbu]: 1 }, { redaman: 1, respons: 0.24 });
+  }
+
+  function efekBenarSolo() {
+    getar([15, 40, 15, 40, 30]);
+    slotEl.forEach((b, i) => {
+      const jeda = (Math.floor(i / 3) + i % 3) * 70;
+      tunda(jedaSolo, () => G.gerakkan(b).dorong({ skala: 2.8 }, PEGAS.pipih), jeda);
+    });
+    P.GARIS.forEach((_, n) => tunda(jedaSolo, () => sorotGaris(n, HEX_BENAR), 220 + n * 70));
+    tunda(jedaSolo, () => {
+      E.konfeti([HEX_BENAR, '#ffffff', ...WARNA.map((w) => w.hex)]);
+      suara.menang();
+    }, 660);
+  }
+
+  function efekSalahSolo(gagal) {
+    getar([30, 40, 30]);
+    hapusSorot();
+    gagal.forEach((g) => {
+      sorotGaris(g.indeks, HEX_SALAH);
+      g.slot.forEach((i, n) => G.gerakkan(slotEl[i]).dorong({ x: n % 2 ? -300 : 300 }, PEGAS.goyang));
+    });
+    E.guncang($('papan'), 340);
+    G.gerakkan($('pesan-solo')).set({ y: 12, buram: 0 });
+    G.gerakkan($('pesan-solo')).ke({ y: 0, buram: 1 }, PEGAS.pilih);
+  }
+
+  function kunciSolo() {
+    if (!sesi || sesi.selesai) return;
+    // Waktu dicek saat kunci ditekan, karena bingkai terakhir bisa saja belum berjalan.
+    if (modeRanked && sisaRanked() <= 0) {
+      gagalRankedSolo();
+      return;
+    }
+    if (sesi.papan.includes(null)) {
+      tolakKunci();
+      return;
+    }
+    const r = P.kunci(sesi);
+    if (!r) return;
+    pesanSementara = null;
+    if (modeRanked) {
+      if (r.benar) menangRankedSolo();
+      else salahRanked();
+      return;
+    }
+    if (!r.benar) {
+      suara.salah();
+      gambarSolo();
+      efekSalahSolo(r.gagal);
+      return;
+    }
+    const detik = Math.round((performance.now() - mulaiLevelMs) / 1000);
+    catatUji({ level: levelAktif.level, detik, kunciSalah: sesi.kunciSalah, waktu: new Date().toISOString() });
+    if (R.tandaiLatihan(progres, levelAktif.level)) levelBaruSelesai = levelAktif.level;
+    simpanProgres();
+    suara.benar();
+    gambarSolo();
+    efekBenarSolo();
+    pesanMelayang('Latihan selesai!', 'perayaan');
+    const { kunciSalah } = sesi;
+    tunda(jedaSolo, () => tampilkanHasilLevel(detik, kunciSalah), G.kurangi() ? 500 : JEDA_MENANG_SOLO_MS);
+  }
+
+  function tampilkanHasilLevel(detik, kunciSalah) {
+    bukaHasil({ judul: `Level ${levelAktif.level} selesai!`, lanjut: lanjutanPractice() });
+    hitungNaik($('detail-hasil'), detik, (d) => `Waktu ${formatWaktu(d)}, kunci salah ${kunciSalah} kali`);
+  }
+
+  /* Kontrol */
+  // Tekanan terasa di pointerdown. Kalau jari bergeser menjauh dari tombol, tekanannya
+  // lepas, dan kembali lagi kalau jari kembali, sama seperti klik yang bisa dibatalkan.
+  function pasangSistemTekan() {
+    let aktif = null;
+    let idPointer = null;
+    document.addEventListener('pointerdown', (e) => {
+      const b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      aktif = b;
+      idPointer = e.pointerId;
+      b.classList.add('ditekan');
+      if (b.matches('.tombol-menu, .tombol-level') && b.getAttribute('aria-disabled') !== 'true') {
+        suara.tekan();
+        getar(8);
+      }
+    }, true);
+    document.addEventListener('pointermove', (e) => {
+      if (!aktif || e.pointerId !== idPointer) return;
+      if (gestur && gestur.aktif) return;
+      const r = aktif.getBoundingClientRect();
+      const pas = 12;
+      const dalam = e.clientX >= r.left - pas && e.clientX <= r.right + pas && e.clientY >= r.top - pas && e.clientY <= r.bottom + pas;
+      aktif.classList.toggle('ditekan', dalam);
+    }, { passive: true });
+    const lepas = (e) => {
+      if (!aktif || e.pointerId !== idPointer) return;
+      aktif.classList.remove('ditekan');
+      aktif = null;
+    };
+    document.addEventListener('pointerup', lepas, true);
+    document.addEventListener('pointercancel', lepas, true);
+  }
+  pasangSistemTekan();
+
+  document.addEventListener('pointermove', gerakSeret);
+  document.addEventListener('pointerup', lepasSeret);
+  document.addEventListener('pointercancel', batalSeret);
+
+  // Di layar sentuh, audio baru boleh menyala setelah jari diangkat.
+  const bukaAudio = () => {
+    if (bisu) return;
+    try { konteksAudio(); } catch (e) {}
+  };
+  document.addEventListener('pointerup', bukaAudio, { passive: true });
+  document.addEventListener('keydown', bukaAudio);
+
+  // pointerdown lebih cepat dari click, jadi rebutan terasa adil di layar sentuh.
+  tombolRebut.forEach((tombol, i) => {
+    tombol.addEventListener('pointerdown', (e) => { e.preventDefault(); tekan(i); });
+    tombol.addEventListener('click', (e) => { if (e.detail === 0) tekan(i); });
+  });
+  tombolTukar.forEach((tombol, i) => tombol.addEventListener('click', () => tukar(i)));
+  document.addEventListener('keydown', (e) => {
+    if (overlayTerbuka($('dialog-keluar'))) {
+      if (e.key === 'Escape') tutupDialogKeluar();
+      return;
+    }
+    if (overlayTerbuka($('dialog-mode'))) {
+      if (e.key === 'Escape') batalPilihMode();
+      return;
+    }
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target.closest('textarea, input')) return;
+    const k = e.key.toLowerCase();
+    if (layarAktif === 'main') tombolDuel(k);
+    if (layarAktif === 'solo') tombolSolo(k);
+  });
+
+  // Saat memilih, tombol mengikuti posisi kartu di meja. A dan L hanya untuk merebut giliran.
+  function tombolDuel(k) {
+    if (!s) return;
+    if (s.fase === 'memilih') {
+      const i = TOMBOL_MEJA.indexOf(k);
+      if (i >= 0) klikKartu(i);
+      return;
+    }
+    if (k === 'a') tekan(0);
+    if (k === 'l') tekan(1);
+  }
+
+  function tombolSolo(k) {
+    if (!sesi || sesi.selesai || overlayTerbuka($('layar-hasil'))) return;
+    const slot = TOMBOL_SLOT.indexOf(k);
+    if (slot >= 0) {
+      tekanSlotSolo(slot);
+      return;
+    }
+    const n = TOMBOL_SEDIA.indexOf(k);
+    if (n >= 0 && n < sesi.tersedia.length) {
+      tekanKartuSolo(sesi.tersedia[n]);
+      return;
+    }
+    if (k === 'k') kunciSolo();
+    if (k === 'h') pakaiHintSolo();
+    if (k === 't') pakaiWaktuSolo();
+  }
+  document.addEventListener('contextmenu', (e) => {
+    if (e.target.closest('#layar-main, #layar-solo, #lapisan-seret')) e.preventDefault();
+  });
+
+  $('tombol-solo').addEventListener('click', bukaPeta);
+  $('tombol-peta-keluar').addEventListener('click', () => tampilkan('menu', 'mundur'));
+  $('tombol-solo-keluar').addEventListener('click', keluarSolo);
+  $('tombol-mode-ranked').addEventListener('click', () => pilihMode('ranked'));
+  $('tombol-mode-practice').addEventListener('click', () => pilihMode('practice'));
+  $('tombol-mode-batal').addEventListener('click', batalPilihMode);
+  $('tombol-mode-heart').addEventListener('click', pakaiHeartDiMode);
+  $('tombol-mode-toko').addEventListener('click', () => {
+    tutupPilihMode();
+    bukaToko('peta');
+  });
+  $('tombol-toko').addEventListener('click', () => bukaToko('menu'));
+  $('tombol-profil').addEventListener('click', bukaProfil);
+  $('tombol-profil-keluar').addEventListener('click', () => tampilkan('menu', 'mundur'));
+  $('tombol-peta-toko').addEventListener('click', () => bukaToko('peta'));
+  $('tombol-toko-keluar').addEventListener('click', tutupToko);
+  $('tombol-hint').addEventListener('click', pakaiHintSolo);
+  $('tombol-waktu').addEventListener('click', pakaiWaktuSolo);
+  $('dialog-mode').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) batalPilihMode();
+  });
+  $('tombol-kosongkan').addEventListener('click', () => {
+    if (!sesi) return;
+    if (ubahPapan(() => P.kosongkan(sesi), null, 28)) getar(8);
+  });
+  $('tombol-kunci').addEventListener('click', kunciSolo);
+  $('tombol-level-lanjut').addEventListener('click', () => { if (aksiLanjut) aksiLanjut(); });
+  $('tombol-level-ulang').addEventListener('click', ulangiLevel);
+  $('tombol-level-practice').addEventListener('click', () => mulaiLevel(levelAktif.level));
+  $('tombol-level-peta').addEventListener('click', kembaliKePeta);
+  $('tombol-salin-uji').addEventListener('click', salinUji);
+  $('tombol-hapus-uji').addEventListener('click', hapusUji);
+  $('tombol-reset-progres').addEventListener('click', resetProgres);
+  $('tombol-buka-semua').addEventListener('click', ubahBukaSemua);
+  $('tombol-mulai').addEventListener('click', mulai);
+  $('tombol-ulang').addEventListener('click', mulai);
+  $('tombol-menu').addEventListener('click', keMenu);
+  $('tombol-keluar').addEventListener('click', () => bukaDialogKeluar('duel'));
+  $('tombol-lanjut-main').addEventListener('click', tutupDialogKeluar);
+  $('tombol-yakin-keluar').addEventListener('click', yakinKeluar);
+  $('tombol-cara').addEventListener('click', () => tampilkan('cara', 'maju'));
+  // Di area yang bisa digulir, browser HP bisa menelan click pertama setelah menggulir.
+  // Ketukan dihitung saat jari diangkat. Menggulir dari tombol memicu pointercancel, jadi tidak ikut.
+  function ketukAndal(el, aksi) {
+    let id = null;
+    let sudah = false;
+    el.addEventListener('pointerdown', (e) => { id = e.pointerId; sudah = false; });
+    el.addEventListener('pointercancel', () => { id = null; });
+    el.addEventListener('pointerup', (e) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      const r = el.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+      sudah = true;
+      aksi();
+    });
+    // click tetap dipakai untuk keyboard, dan tidak mengulang ketukan yang sudah dihitung.
+    el.addEventListener('click', () => {
+      if (!sudah) aksi();
+      sudah = false;
+    });
+  }
+  ketukAndal($('tombol-tutup-cara'), () => {
+    if (layarAktif === 'cara') tampilkan('menu', 'mundur');
+  });
+  document.querySelectorAll('.tombol-suara').forEach((b) => b.addEventListener('click', () => {
+    bisu = !bisu;
+    try { localStorage.setItem('setdoku-bisu', bisu ? '1' : '0'); } catch (e) {}
+    gambarIkonSuara();
+    suara.pilih();
+  }));
+
+  /* Persiapan */
+  if (window.CSS && CSS.supports('transition-timing-function', 'linear(0, 1)') && !G.kurangi()) {
+    const { kurva, durasiMs } = G.kurvaCss(PEGAS.tombol);
+    document.documentElement.style.setProperty('--kurva-pegas', kurva);
+    document.documentElement.style.setProperty('--lama-pegas', `${durasiMs}ms`);
+  }
+
+  $('pola').innerHTML = WARNA.map((w, i) =>
+    `<pattern id="titik-${i}" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.6" fill="${w.hex}"/></pattern>`
+  ).join('');
+
+  const kartu = (bentuk, warna, jumlah, isian) => ({ bentuk, warna, jumlah, isian });
+  const isiDeret = (id, daftar) => { $(id).innerHTML = daftar.map(svgKartu).join(''); };
+  isiDeret('logo', [kartu(0, 0, 0, 0), kartu(1, 1, 1, 1), kartu(2, 2, 2, 2)]);
+  isiDeret('contoh-1', [kartu(1, 1, 0, 2), kartu(1, 1, 1, 2), kartu(1, 1, 2, 2)]);
+  isiDeret('contoh-2', [kartu(0, 0, 0, 0), kartu(1, 1, 1, 1), kartu(2, 2, 2, 2)]);
+  isiDeret('contoh-3', [kartu(2, 0, 0, 1), kartu(2, 0, 1, 1), kartu(2, 2, 2, 1)]);
+  gambarIkonSuara();
+  bangunToko();
+  terapkanSkin();
+  $('uji-main').hidden = !MODE_UJI;
+  // G-08: bekerja di https dan localhost. Di alamat LAN biasa, game tetap jalan tanpa mode offline.
+  if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+  timerIsi.style.transform = 'scaleX(0)';
+
+  // Logo dibagikan saat halaman dibuka, dan melompat kalau disentuh.
+  [...$('logo').children].forEach((svg, i) => {
+    const g = G.gerakkan(svg);
+    g.set({ y: -46, skala: 0.6, putar: (i - 1) * 22, buram: 0 });
+    g.ke({ y: 0, skala: 1, putar: 0, buram: 1 }, { ...PEGAS.bagi, tunda: 80 + i * 90 });
+    svg.addEventListener('pointerdown', () => {
+      g.dorong({ y: -520, putar: (i - 1 || 1) * 90 }, PEGAS.lompat);
+      suara.pilih();
+      getar(6);
+    });
+  });
+  document.querySelectorAll('#layar-menu .tombol-menu').forEach((b, i) => {
+    G.gerakkan(b).set({ y: 18, buram: 0 });
+    G.gerakkan(b).ke({ y: 0, buram: 1 }, { ...PEGAS.bagi, tunda: 340 + i * 70 });
+  });
+})();
+</script>
+</body>
+</html>
