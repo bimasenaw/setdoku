@@ -3,7 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0b0e24">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0b0e24" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eef0fa" media="(prefers-color-scheme: light)">
+<script>
+  // Dipasang sebelum CSS dibaca, supaya tema pilihan pemain tidak berkedip saat halaman dibuka.
+  try {
+    const tema = localStorage.getItem('setdoku-tema');
+    if (tema === 'gelap' || tema === 'terang') document.documentElement.dataset.tema = tema;
+  } catch (e) {}
+</script>
 <title>SETDOKU</title>
 <meta name="description" content="Puzzle dan duel tiga kartu. Susun papan sampai setiap baris dan kolom membentuk rasi, atau berebut menemukan rasi berdua.">
 <script>
@@ -59,6 +68,111 @@
   --bayang-kartu: 0 2px 5px #0006, 0 6px 14px #0004;
   --bayang-angkat: 0 20px 36px #000a, 0 8px 14px #0007;
   --ceruk: inset 0 3px 10px #0008, inset 0 0 0 2px #4d569f;
+
+  /* Tema gelap (bawaan). Tema terang mengganti token yang sama di bawah. */
+  color-scheme: dark;
+  --sisi-gelap: #070a1d;
+  --tirai: #070a1d8c;
+  --tirai-kuat: #070a1db0;
+  --tirai-solid: #070a1df2;
+  --kaca: #1a2048d9;
+  --kaca-tepi: #ffffff24;
+  --kaca-kilau: #ffffff2e;
+  --bayang-kaca: #0009;
+  --toast: #1a2048;
+  --bayang-toast: #0008;
+  --emas: #fae242;
+  --info: #68dcf3;
+  --teks-isi: #d6d9f3;
+  --jalur: #0a0d26;
+  --terkunci-isi: #0a0d2680;
+  --terkunci-tepi: #39417f80;
+  --isi-slot: #151a3acc;
+  --fokus: #ffffff;
+  --langit:
+    radial-gradient(1.5px 1.5px at 12% 18%, #fff9, transparent),
+    radial-gradient(1px 1px at 28% 72%, #fff8, transparent),
+    radial-gradient(1.5px 1.5px at 47% 33%, #fff7, transparent),
+    radial-gradient(1px 1px at 63% 86%, #fff8, transparent),
+    radial-gradient(1.5px 1.5px at 78% 12%, #fff9, transparent),
+    radial-gradient(1px 1px at 91% 58%, #fff8, transparent),
+    radial-gradient(70% 55% at 50% 50%, #232a6355, transparent);
+}
+/* Tema terang: mengikuti perangkat, kecuali pemain memilih Gelap. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-tema="gelap"]) {
+    color-scheme: light;
+    --malam: #eef0fa;
+    --malam-2: #ffffff;
+    --garis: #c5c9e6;
+    --teks: #171a3a;
+    --redup: #545a84;
+    --p1: #7059f0;
+    --p2: #0b8f6f;
+    --benar: #1b8247;
+    --salah: #cf2c46;
+    --sisi-gelap: #b9bedf;
+    --tirai: #1b1f3d47;
+    --tirai-kuat: #1b1f3d70;
+    --tirai-solid: #eef0faf5;
+    --kaca: #ffffffdb;
+    --kaca-tepi: #1b1f3d1f;
+    --kaca-kilau: #ffffff;
+    --bayang-kaca: #1b1f3d38;
+    --toast: #ffffff;
+    --bayang-toast: #1b1f3d2e;
+    --emas: #8a6600;
+    --info: #08718e;
+    --teks-isi: #2c3160;
+    --jalur: #dde0f2;
+    --terkunci-isi: #e3e5f3;
+    --terkunci-tepi: #cdd1ea;
+    --isi-slot: #dde0f1;
+    --fokus: #171a3a;
+    --langit: radial-gradient(75% 55% at 50% 42%, #ffffffe6, transparent);
+    --bayang-kartu: 0 2px 5px #1b1f3d30, 0 6px 14px #1b1f3d1f;
+    --bayang-angkat: 0 20px 36px #1b1f3d4d, 0 8px 14px #1b1f3d2e;
+    --ceruk: inset 0 2px 6px #1b1f3d24, inset 0 0 0 2px #c3c8e6;
+  }
+}
+/* Tema terang yang dipilih pemain di Profil. */
+:root[data-tema="terang"] {
+  color-scheme: light;
+  --malam: #eef0fa;
+  --malam-2: #ffffff;
+  --garis: #c5c9e6;
+  --teks: #171a3a;
+  --redup: #545a84;
+  --p1: #7059f0;
+  --p2: #0b8f6f;
+  --benar: #1b8247;
+  --salah: #cf2c46;
+  --sisi-gelap: #b9bedf;
+  --tirai: #1b1f3d47;
+  --tirai-kuat: #1b1f3d70;
+  --tirai-solid: #eef0faf5;
+  --kaca: #ffffffdb;
+  --kaca-tepi: #1b1f3d1f;
+  --kaca-kilau: #ffffff;
+  --bayang-kaca: #1b1f3d38;
+  --toast: #ffffff;
+  --bayang-toast: #1b1f3d2e;
+  --emas: #8a6600;
+  --info: #08718e;
+  --teks-isi: #2c3160;
+  --jalur: #dde0f2;
+  --terkunci-isi: #e3e5f3;
+  --terkunci-tepi: #cdd1ea;
+  --isi-slot: #dde0f1;
+  --fokus: #171a3a;
+  --langit: radial-gradient(75% 55% at 50% 42%, #ffffffe6, transparent);
+  --bayang-kartu: 0 2px 5px #1b1f3d30, 0 6px 14px #1b1f3d1f;
+  --bayang-angkat: 0 20px 36px #1b1f3d4d, 0 8px 14px #1b1f3d2e;
+  --ceruk: inset 0 2px 6px #1b1f3d24, inset 0 0 0 2px #c3c8e6;
+}
+/* Pergantian tema memudar, bukan meloncat (dipasang sebentar oleh skrip). */
+:root.ganti-tema, :root.ganti-tema * {
+  transition: background-color .35s ease, color .35s ease, border-color .35s ease, fill .35s ease, box-shadow .35s ease !important;
 }
 @supports (height: 100dvh) { :root { --tinggi: calc(100dvh - var(--aman-atas) - var(--aman-bawah)); } }
 @media (orientation: landscape) {
@@ -76,14 +190,7 @@
 html, body { height: 100%; margin: 0; }
 body {
   background-color: var(--malam);
-  background-image:
-    radial-gradient(1.5px 1.5px at 12% 18%, #fff9, transparent),
-    radial-gradient(1px 1px at 28% 72%, #fff8, transparent),
-    radial-gradient(1.5px 1.5px at 47% 33%, #fff7, transparent),
-    radial-gradient(1px 1px at 63% 86%, #fff8, transparent),
-    radial-gradient(1.5px 1.5px at 78% 12%, #fff9, transparent),
-    radial-gradient(1px 1px at 91% 58%, #fff8, transparent),
-    radial-gradient(70% 55% at 50% 50%, #232a6355, transparent);
+  background-image: var(--langit);
   color: var(--teks);
   font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
   overflow: hidden;
@@ -93,7 +200,7 @@ body {
   -webkit-user-select: none;
 }
 button { font: inherit; color: inherit; touch-action: manipulation; }
-:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--fokus); outline-offset: 2px; }
 
 /* Semua layar bertumpuk, supaya layar lama dan baru bisa bergerak bersamaan. */
 .layar { position: fixed; top: var(--aman-atas); left: var(--aman-kiri); z-index: 1; height: var(--tinggi); width: var(--lebar-layar); }
@@ -103,7 +210,7 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
 /* Sistem tombol: turun seketika saat ditekan, memantul saat dilepas. */
 :where(.tombol-menu, .tombol-rebut, .tombol-tukar, .tombol-level, .tombol-beli, .tombol-item, .aksi-uji button) {
   --dalam: 3px;
-  --sisi-tombol: #070a1d;
+  --sisi-tombol: var(--sisi-gelap);
   box-shadow: 0 var(--dalam) 0 var(--sisi-tombol);
   transition:
     transform var(--lama-pegas) var(--kurva-pegas),
@@ -134,6 +241,17 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
 .logo { display: flex; gap: 10px; margin-bottom: 4px; }
 .logo svg { width: 62px; height: 87px; filter: drop-shadow(0 8px 12px #0007); cursor: pointer; }
 h1 { font-size: clamp(42px, 11vw, 68px); line-height: 1.02; margin: 6px 0 0; font-weight: 800; letter-spacing: -.02em; }
+/* Kontrol bersegmen: pilihan aktif tampak terangkat dari jalurnya. */
+.pilih-tema { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 12px; }
+.pilih-tema > span { font-weight: 700; font-size: 15px; }
+.segmen { display: flex; padding: 3px; gap: 2px; border-radius: 11px; background: var(--jalur); border: 1px solid var(--garis); }
+.segmen button {
+  min-height: 34px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+  color: var(--redup); font-size: 14px; font-weight: 700;
+  transition: background-color .2s, color .2s, box-shadow .2s, transform .1s ease-out;
+}
+.segmen button:active { transform: scale(.96); }
+.segmen button[aria-checked="true"] { background: var(--malam-2); color: var(--teks); box-shadow: 0 1px 3px var(--bayang-toast), 0 0 0 1px var(--garis); }
 .slogan { color: var(--redup); margin: 0 0 18px; font-size: 17px; }
 .tombol-menu {
   --dalam: 5px;
@@ -149,7 +267,7 @@ h1 { font-size: clamp(42px, 11vw, 68px); line-height: 1.02; margin: 6px 0 0; fon
 #layar-cara { overflow-y: auto; padding: 24px 16px 32px; user-select: text; -webkit-user-select: text; }
 .isi-cara { max-width: 560px; margin: 0 auto; }
 h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01em; }
-.isi-cara p, .isi-cara li { line-height: 1.5; color: #d6d9f3; }
+.isi-cara p, .isi-cara li { line-height: 1.5; color: var(--teks-isi); }
 .isi-cara ul { padding-left: 20px; margin: 8px 0; }
 .contoh { background: var(--malam-2); border: 1px solid var(--garis); border-radius: 14px; padding: 14px; margin: 14px 0; }
 .contoh h3 { margin: 0 0 10px; font-size: 16px; }
@@ -227,10 +345,10 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
   flex: none; width: 32px; height: 32px; padding: 0; border-radius: 9px; cursor: pointer;
   border: 1px solid var(--garis); background: var(--malam-2);
   display: grid; place-items: center;
-  box-shadow: 0 2px 0 #070a1d;
+  box-shadow: 0 2px 0 var(--sisi-gelap);
   transition: transform var(--lama-pegas) var(--kurva-pegas), box-shadow var(--lama-pegas) var(--kurva-pegas), filter .15s;
 }
-.ikon.ditekan, .ikon:active { transform: scale(.9); box-shadow: 0 0 0 #070a1d; transition-duration: 50ms; transition-timing-function: ease-out; }
+.ikon.ditekan, .ikon:active { transform: scale(.9); box-shadow: 0 0 0 var(--sisi-gelap); transition-duration: 50ms; transition-timing-function: ease-out; }
 .ikon svg { width: 17px; height: 17px; fill: none; stroke: var(--teks); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .timer { flex: 1; height: 8px; border-radius: 4px; background: var(--malam-2); overflow: hidden; }
 .timer i { display: block; height: 100%; width: 100%; background: var(--warna-timer, transparent); transform-origin: left; }
@@ -269,7 +387,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
 @media (hover: hover) and (pointer: fine) {
   #layar-main.memilih .kartu::after, .sedia::after, .slot:not(.tetap)::after {
     content: attr(data-kunci); position: absolute; left: 4px; top: 4px; pointer-events: none;
-    min-width: 16px; padding: 0 3px; border-radius: 5px; background: #0009; color: var(--teks);
+    min-width: 16px; padding: 0 3px; border-radius: 5px; background: #0009; color: #eef0ff; /* lencana selalu gelap, di kedua tema */
     font-size: 11px; font-weight: 700; line-height: 16px; text-align: center;
   }
 }
@@ -288,18 +406,18 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
 /* Overlay kaca */
 #layar-menang, #layar-hasil, #dialog-keluar, #dialog-mode {
   position: fixed; inset: 0; z-index: 5;
-  background: #070a1d8c;
+  background: var(--tirai);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   backdrop-filter: blur(14px) saturate(140%);
   display: flex; align-items: center; justify-content: center; padding: 16px;
 }
-#dialog-keluar { z-index: 10; background: #070a1db0; }
+#dialog-keluar { z-index: 10; background: var(--tirai-kuat); }
 /* Blur layar penuh mahal. Saat overlay menutup, blur dilepas supaya gerakannya tetap mulus. */
 #layar-menang.pergi, #layar-hasil.pergi, #dialog-keluar.pergi, #dialog-mode.pergi { -webkit-backdrop-filter: none; backdrop-filter: none; }
 .kotak-kaca, .kotak-dialog {
-  background: #1a2048d9;
-  border: 1px solid #ffffff24;
-  box-shadow: 0 30px 60px #0009, inset 0 1px 0 #ffffff2e;
+  background: var(--kaca);
+  border: 1px solid var(--kaca-tepi);
+  box-shadow: 0 30px 60px var(--bayang-kaca), inset 0 1px 0 var(--kaca-kilau);
   display: flex; flex-direction: column; align-items: center; text-align: center;
   max-height: calc(var(--tinggi) - 32px); overflow-y: auto;
 }
@@ -350,7 +468,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
 .judul-chapter { margin: 0 0 2px; font-size: 17px; font-weight: 800; line-height: 1.25; }
 .aturan-chapter { margin: 0 0 10px; color: var(--redup); font-size: 13px; line-height: 1.35; font-variant-numeric: tabular-nums; }
 .aturan-chapter.terkunci { color: var(--salah); }
-.meter-chapter { height: 6px; border-radius: 999px; background: #0a0d26; overflow: hidden; }
+.meter-chapter { height: 6px; border-radius: 999px; background: var(--jalur); overflow: hidden; }
 .meter-chapter span { display: block; height: 100%; min-width: 0; background: var(--aksen); border-radius: inherit; }
 .angka-chapter { display: block; margin-top: 6px; color: var(--redup); font-size: 12px; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .titik { transition: none; } }
@@ -366,7 +484,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
 .tombol-level.selesai { --sisi-tombol: color-mix(in srgb, var(--benar) 35%, #000); border-color: var(--benar); color: var(--benar); }
 .tombol-level.selesai::after { content: "\2713"; position: absolute; top: 2px; right: 6px; font-size: 12px; }
 .tombol-level.punya-stars::after { content: none; }
-.tombol-level.terkunci { cursor: default; box-shadow: none; color: var(--redup); background: #0a0d2680; border-color: #39417f80; }
+.tombol-level.terkunci { cursor: default; box-shadow: none; color: var(--redup); background: var(--terkunci-isi); border-color: var(--terkunci-tepi); }
 .tombol-level.terkunci .nomor { opacity: .6; }
 .tombol-level.baru-selesai::after, .tombol-level.baru-selesai .bawah, .tombol-level.baru-terbuka .nomor { animation: pop .55s cubic-bezier(.3, 1.8, .6, 1); }
 
@@ -413,7 +531,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
 #judul-level.gawat { color: var(--salah); }
 #timer-solo { flex: none; height: 6px; border-radius: 3px; }
 #timer-solo i { background: var(--p1); }
-#timer-solo.hampir i { background: #fae242; }
+#timer-solo.hampir i { background: var(--emas); }
 #timer-solo.gawat i { background: var(--salah); }
 /* Teks melayang di bagian atas. Masuk dan keluar memakai pegas (gerak.js), sedangkan
    .toast-isi naik sangat pelan selama tampil, jadi gerakannya tidak pernah berhenti mendadak. */
@@ -427,14 +545,14 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
 .toast.di-solo { top: calc(env(safe-area-inset-top, 0px) + 44px); }
 /* Di Toko, saldo di baris judul harus tetap terlihat setelah membeli. */
 .toast.di-toko { top: calc(env(safe-area-inset-top, 0px) + 52px); }
-.toast.perayaan { color: #fae242; }
+.toast.perayaan { color: var(--emas); }
 .toast.penalti, .toast.peringatan { color: var(--salah); }
-.toast.info { color: #68dcf3; }
+.toast.info { color: var(--info); }
 .toast-isi {
   display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 7px 16px;
   text-align: center; text-wrap: balance;
-  background: #1a2048; border: 1px solid currentColor; border-radius: 18px;
-  box-shadow: 0 8px 20px #0008;
+  background: var(--toast); border: 1px solid currentColor; border-radius: 18px;
+  box-shadow: 0 8px 20px var(--bayang-toast);
   animation: toast-naik var(--lama-toast, 3s) linear forwards;
 }
 .toast-teks { font-size: 15px; font-weight: 800; line-height: 1.25; font-variant-numeric: tabular-nums; }
@@ -462,7 +580,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
 .slot.tetap .tepi { fill: var(--latar-tetap, #22275b); stroke: var(--tepi-tetap, #7a84d6); }
 .slot.ditekan:not(.kosong, :disabled) { transform: scale(.96); transition-duration: 50ms; transition-timing-function: ease-out; }
 /* Slot kosong adalah ceruk. Kartu yang sedang terbang menuju slot juga belum menutupinya. */
-.slot.kosong, .slot.menunggu, .slot.asal { background: #151a3acc; box-shadow: var(--ceruk); }
+.slot.kosong, .slot.menunggu, .slot.asal { background: var(--isi-slot); box-shadow: var(--ceruk); }
 .slot.menunggu > svg { visibility: hidden; }
 .slot.asal > svg { opacity: .25; }
 .slot.siap { background: #a594ff1f; box-shadow: inset 0 2px 8px #0009, inset 0 0 0 2px var(--p1); }
@@ -548,7 +666,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
   background: var(--p1); color: #14123a; font-size: 14px; font-weight: 800; white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.tombol-beli.sekunder { --sisi-tombol: #070a1d; background: var(--malam); color: var(--teks); border: 1px solid var(--garis); }
+.tombol-beli.sekunder { --sisi-tombol: var(--sisi-gelap); background: var(--malam); color: var(--teks); border: 1px solid var(--garis); }
 .tombol-beli.yakin { --sisi-tombol: color-mix(in srgb, var(--salah) 50%, #000); background: var(--salah); }
 #tombol-kunci[aria-disabled="true"] { cursor: default; opacity: .45; box-shadow: none; }
 #tombol-kunci.bangun { animation: bangun .75s ease-out; }
@@ -588,7 +706,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
 .star-hasil, .nyawa-ikon { display: inline-block; }
 .star-hasil.kosong, .nyawa-ikon.kosong { filter: grayscale(1) brightness(.7); opacity: .3; }
 .nyawa-ikon { transition: filter .35s, opacity .35s; }
-#hadiah-hasil { margin: 0; font-size: 18px; font-weight: 800; color: #fae242; font-variant-numeric: tabular-nums; }
+#hadiah-hasil { margin: 0; font-size: 18px; font-weight: 800; color: var(--emas); font-variant-numeric: tabular-nums; }
 #hadiah-hasil.tetap { font-size: 15px; font-weight: 600; color: var(--redup); }
 #detail-hasil { color: var(--redup); font-size: 16px; line-height: 1.35; margin: 0 0 6px; font-variant-numeric: tabular-nums; }
 #saran-hasil { color: var(--redup); font-size: 13px; line-height: 1.35; margin: -8px 0 6px; font-variant-numeric: tabular-nums; }
@@ -615,7 +733,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
   .toast-isi { animation: none; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  #layar-menang, #layar-hasil, #dialog-keluar, #dialog-mode { background: #070a1df2; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  #layar-menang, #layar-hasil, #dialog-keluar, #dialog-mode { background: var(--tirai-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .kotak-kaca, .kotak-dialog { background: var(--malam-2); }
 }
 @media (prefers-contrast: more) {
@@ -797,6 +915,14 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
       <h2>Profil</h2>
     </div>
     <div class="status-peta" id="isi-profil"></div>
+    <div class="pilih-tema">
+      <span id="label-tema">Tampilan</span>
+      <div class="segmen" id="segmen-tema" role="radiogroup" aria-labelledby="label-tema">
+        <button role="radio" data-tema="otomatis">Otomatis</button>
+        <button role="radio" data-tema="gelap">Gelap</button>
+        <button role="radio" data-tema="terang">Terang</button>
+      </div>
+    </div>
     <p class="keterangan">Progres tersimpan di browser ini. Menghapus data browser berarti progres hilang.</p>
   </div>
 </section>
@@ -908,6 +1034,64 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
   const L = window.Logika;
   const P = window.Puzzle;
   const LEVEL = window.DataLevel;
+
+  /* Tema: Otomatis mengikuti perangkat. Pilihan disimpan per perangkat. */
+  const KUNCI_TEMA = 'setdoku-tema';
+  const TEMA = ['otomatis', 'gelap', 'terang'];
+  const metaWarna = [...document.querySelectorAll('meta[name="theme-color"]')];
+  const warnaMetaAsli = metaWarna.map((m) => m.content);
+
+  function temaTersimpan() {
+    try {
+      const t = localStorage.getItem(KUNCI_TEMA);
+      return TEMA.includes(t) ? t : 'otomatis';
+    } catch (e) {
+      return 'otomatis';
+    }
+  }
+
+  function tandaiTema(tema) {
+    document.querySelectorAll('#segmen-tema button').forEach((b) => {
+      const aktif = b.dataset.tema === tema;
+      b.setAttribute('aria-checked', aktif ? 'true' : 'false');
+      b.tabIndex = aktif ? 0 : -1;
+    });
+    // Bilah status HP ikut warna latar tema yang dipilih.
+    if (tema === 'otomatis') {
+      metaWarna.forEach((m, i) => { m.content = warnaMetaAsli[i]; });
+    } else {
+      const latar = getComputedStyle(document.documentElement).getPropertyValue('--malam').trim();
+      metaWarna.forEach((m) => { m.content = latar; });
+    }
+  }
+
+  function pilihTema(tema) {
+    const akar = document.documentElement;
+    if (!G.kurangi()) {
+      akar.classList.add('ganti-tema');
+      clearTimeout(pilihTema.jeda);
+      pilihTema.jeda = setTimeout(() => akar.classList.remove('ganti-tema'), 400);
+    }
+    if (tema === 'otomatis') delete akar.dataset.tema;
+    else akar.dataset.tema = tema;
+    try { localStorage.setItem(KUNCI_TEMA, tema); } catch (e) {}
+    tandaiTema(tema);
+  }
+
+  tandaiTema(temaTersimpan());
+  document.querySelectorAll('#segmen-tema button').forEach((b) => b.addEventListener('click', () => {
+    if (b.getAttribute('aria-checked') === 'true') return;
+    pilihTema(b.dataset.tema);
+    getar(8);
+  }));
+  document.getElementById('segmen-tema').addEventListener('keydown', (e) => {
+    const arah = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    if (!arah) return;
+    e.preventDefault();
+    const baru = TEMA[(TEMA.indexOf(temaTersimpan()) + arah + TEMA.length) % TEMA.length];
+    pilihTema(baru);
+    document.querySelector(`#segmen-tema [data-tema="${baru}"]`).focus();
+  });
   const LEVEL_PER_CHAPTER = 50;
   const G = window.Gerak;
   const E = window.Efek;

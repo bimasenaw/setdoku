@@ -269,7 +269,8 @@ async function ujiSeret(browser, galat) {
 
   // Kembali ke peta.
   await page.evaluate(() => document.getElementById('tombol-level-peta').click());
-  await tidur(800);
+  // Menunggu animasi keluar selesai, bukan waktu tetap: lamanya bergantung pada beban komputer.
+  await page.waitForFunction(() => document.getElementById('layar-solo').hidden && document.getElementById('layar-hasil').hidden, { timeout: 3000 }).catch(() => {});
   const peta = await page.evaluate(() => ({
     solo: document.getElementById('layar-solo').hidden,
     peta: document.getElementById('layar-peta').hidden,
@@ -1924,6 +1925,85 @@ async function isiPractice(page, nomor) {
   await isiBenar(page, nomor, 'practice');
 }
 
+async function ujiTema(browser, galat) {
+  console.log('\n== Tema gelap dan terang ==');
+  const latar = (p, sel) => p.$eval(sel, (e) => getComputedStyle(e).backgroundColor);
+  const terangKah = (rgb) => {
+    const [r, g, b] = rgb.match(/\d+/g).map(Number);
+    return (r + g + b) / 3 > 160;
+  };
+  const page = await bukaHalaman(browser, { width: 390, height: 844 }, galat);
+  cek('meta color-scheme mencegah browser membalik warna paksa', await page.$eval('meta[name="color-scheme"]', (m) => m.content) === 'dark light');
+
+  // Otomatis mengikuti perangkat.
+  await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
+  await tidur(200);
+  cek('Otomatis: perangkat terang membuat game terang', terangKah(await latar(page, 'body')) && terangKah(await latar(page, '#tombol-mulai')), await latar(page, 'body'));
+  await page.screenshot({ path: path.join(FOTO, 'tema-terang-menu.png') });
+  await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
+  await tidur(200);
+  cek('Otomatis: perangkat gelap membuat game gelap', !terangKah(await latar(page, 'body')));
+
+  // Pilihan pemain mengalahkan perangkat.
+  await klik(page, 'tombol-profil');
+  await tidur(600);
+  const awal = await page.$$eval('#segmen-tema button', (b) => b.map((x) => x.getAttribute('aria-checked')).join());
+  cek('Profil: Otomatis terpilih di awal', awal === 'true,false,false', awal);
+  await page.click('#segmen-tema [data-tema="terang"]');
+  await tidur(500);
+  cek('memilih Terang mengubah game walau perangkat gelap', terangKah(await latar(page, 'body')) && await page.evaluate(() => document.documentElement.dataset.tema === 'terang'));
+  const meta = await page.$$eval('meta[name="theme-color"]', (m) => m.map((x) => x.content).join());
+  cek('warna bilah status HP ikut tema pilihan', meta === '#eef0fa,#eef0fa', meta);
+  await page.screenshot({ path: path.join(FOTO, 'tema-terang-profil.png') });
+  await page.reload();
+  await tidur(300);
+  const sesudahMuat = await page.evaluate(() => ({ tema: document.documentElement.dataset.tema, latar: getComputedStyle(document.body).backgroundColor }));
+  cek('pilihan tema tetap setelah halaman dimuat ulang, tanpa berkedip', sesudahMuat.tema === 'terang' && terangKah(sesudahMuat.latar), JSON.stringify(sesudahMuat));
+  await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
+  await klik(page, 'tombol-profil');
+  await tidur(600);
+  await page.focus('#segmen-tema [aria-checked="true"]');
+  await page.keyboard.press('ArrowRight');
+  await tidur(300);
+  cek('tombol panah keyboard pindah pilihan: Terang lalu Otomatis', await page.evaluate(() => !document.documentElement.dataset.tema && document.activeElement.dataset.tema === 'otomatis'));
+  await page.click('#segmen-tema [data-tema="gelap"]');
+  await tidur(500);
+  cek('memilih Gelap mengalahkan perangkat yang terang', !terangKah(await latar(page, 'body')));
+  await page.click('#segmen-tema [data-tema="terang"]');
+  await tidur(500);
+
+  // Layar utama di tema terang: terlihat, dan tidak ada sisa latar gelap selain kartu.
+  await klik(page, 'tombol-profil-keluar');
+  await tidur(600);
+  await bukaPeta(page);
+  await page.screenshot({ path: path.join(FOTO, 'tema-terang-peta.png') });
+  const peta = await page.evaluate(() => ['.stat', '.kepala-chapter', '.tombol-level'].map((s) => getComputedStyle(document.querySelector(s)).backgroundColor));
+  cek('peta terang: panel dan tombol level ikut terang', peta.every((w) => { const [r, g, b] = w.match(/\d+/g).map(Number); return (r + g + b) / 3 > 160; }), peta.join(' | '));
+  await keLevel(page, 105);
+  await page.screenshot({ path: path.join(FOTO, 'tema-terang-solo.png') });
+  const solo = await page.evaluate(() => ({
+    slot: getComputedStyle(document.querySelector('.slot.kosong')).backgroundColor,
+    kartu: getComputedStyle(document.querySelector('.slot.tetap .tepi')).fill,
+  }));
+  cek('papan terang: slot kosong terang, kartu tetap gelap supaya simbolnya terbaca', (() => { const n = (w) => w.match(/\d+/g).map(Number).slice(0, 3).reduce((a, b) => a + b) / 3; return n(solo.slot) > 160 && n(solo.kartu) < 80; })(), JSON.stringify(solo));
+  await isiBenar(page, 105, 'practice');
+  await klik(page, 'tombol-kunci');
+  await adaHasil(page);
+  await tidur(500);
+  await page.screenshot({ path: path.join(FOTO, 'tema-terang-hasil.png') });
+  cek('layar hasil terang: kotak kaca terang', terangKah(await latar(page, '#layar-hasil .kotak-kaca')));
+  await page.close();
+
+  // Mode berdua juga diperiksa.
+  const duel = await bukaHalaman(browser, { width: 844, height: 390 }, galat);
+  await duel.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
+  await klik(duel, 'tombol-mulai');
+  await tidur(900);
+  await duel.screenshot({ path: path.join(FOTO, 'tema-terang-duel.png') });
+  cek('Duel terang: tidak ada galat dan latar terang', terangKah(await latar(duel, 'body')));
+  await duel.close();
+}
+
 async function ujiChapter(browser, galat) {
   console.log('== Chapter dan Kartu Tersembunyi ==');
   const page = await bukaHalaman(browser, { width: 390, height: 844 }, galat, { bukaSemua: false });
@@ -2851,7 +2931,7 @@ async function ujiKelancaran(browser, galat) {
   const browser = await puppeteer.launch({ executablePath: EDGE, headless: 'new', args: ['--mute-audio'] });
   const galat = [];
   const pilihan = process.argv[2];
-  const daftar = { chapter: ujiChapter, nada: ujiNada, klikDuel: ujiKlikDuel, rilis: ujiRilis, akhir: ujiAkhirTahap2, profil: ujiProfil, skin: ujiSkin, cara: ujiCara, toko: ujiToko, hasil: ujiHasil, toast: ujiToast, peta: ujiPeta, ranked: ujiRanked, ranked20: ujiRanked20, ukuranRanked: ujiUkuranRanked, progres: ujiProgres, tombol: ujiTombol, seret: ujiSeret, duel: ujiDuel, level: ujiSemuaLevel, ukuran: ujiUkuran, sentuh: ujiSentuh, kurang: ujiGerakDikurangi, lancar: ujiKelancaran };
+  const daftar = { tema: ujiTema, chapter: ujiChapter, nada: ujiNada, klikDuel: ujiKlikDuel, rilis: ujiRilis, akhir: ujiAkhirTahap2, profil: ujiProfil, skin: ujiSkin, cara: ujiCara, toko: ujiToko, hasil: ujiHasil, toast: ujiToast, peta: ujiPeta, ranked: ujiRanked, ranked20: ujiRanked20, ukuranRanked: ujiUkuranRanked, progres: ujiProgres, tombol: ujiTombol, seret: ujiSeret, duel: ujiDuel, level: ujiSemuaLevel, ukuran: ujiUkuran, sentuh: ujiSentuh, kurang: ujiGerakDikurangi, lancar: ujiKelancaran };
   for (const [nama, fungsi] of Object.entries(daftar)) {
     if (pilihan && pilihan !== nama) continue;
     try {
