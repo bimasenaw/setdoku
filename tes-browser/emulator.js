@@ -49,5 +49,21 @@ if (java.bin) {
 }
 const kelompok = process.argv.slice(2).filter((a) => /^[a-z]+$/.test(a)).join(' ');
 const perintah = `npx -y ${alat} emulators:exec --only auth,database --project demo-setdoku "node tes-browser/uji-emulator.js ${kelompok}"`;
+// firebase-tools versi lama kadang meninggalkan emulator database tetap hidup di Windows,
+// lalu uji berikutnya gagal karena port-nya masih dipakai. Yang dimatikan hanya proses
+// Java yang memang menjalankan emulator itu.
+function matikanEmulatorSisa() {
+  if (process.platform !== 'win32') return;
+  const cari = spawnSync('powershell', ['-NoProfile', '-Command',
+    "Get-CimInstance Win32_Process -Filter \"Name='java.exe'\" | Where-Object { $_.CommandLine -like '*firebase-database-emulator*' } | ForEach-Object { $_.ProcessId }"], { encoding: 'utf8' });
+  for (const pid of String(cari.stdout || '').split(/\s+/).filter((x) => /^\d+$/.test(x))) {
+    spawnSync('taskkill', ['/PID', pid, '/F'], { stdio: 'ignore' });
+    console.log(`Emulator database yang tertinggal (PID ${pid}) dimatikan.`);
+  }
+}
+
+matikanEmulatorSisa();
 const r = spawnSync(perintah, { cwd: path.join(__dirname, '..'), env, stdio: 'inherit', shell: true });
+matikanEmulatorSisa();
+try { fs.unlinkSync(path.join(__dirname, '..', 'database-debug.log')); } catch (e) {}
 process.exit(r.status === null ? 1 : r.status);

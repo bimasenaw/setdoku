@@ -1,10 +1,7 @@
-// Uji browser duel online (tahap 4a). Lawan dan server ditirukan di dalam halaman, jadi yang
-// diuji adalah alur layarnya: lobi, ruang tunggu, papan, hasil, dan main lagi.
-// Sambungan Firebase sungguhan dan aturan keamanannya diuji terpisah dengan Firebase Emulator.
+// Uji browser duel online beronde (tahap 4a). Lawan dan server ditirukan di dalam halaman, jadi
+// yang diuji adalah alur layarnya: lobi, ruang tunggu, Siap, ronde demi ronde, dan hasil.
+// Sambungan Firebase sungguhan dan aturan keamanannya diuji terpisah di uji-emulator.js.
 const path = require('path');
-
-const LAWAN = 'uid-lawan';
-const SAYA = 'uid-saya';
 
 // Penghubung tiruan dengan antarmuka yang sama seperti public/online.js.
 // window.__palsu dipakai uji untuk berperan sebagai lawan dan menggeser waktu server.
@@ -18,8 +15,9 @@ function pasangPalsu() {
     pendengar: {},
     sambung: new Set(),
     gagal: null, // jenis galat untuk operasi berikutnya
+    tolakJawab: 0, // jumlah kiriman jawaban berikutnya yang ditolak server
     kodeBerikut: [], // kode untuk room yang dibuat berikutnya
-    majuHitung: 0, // memangkas hitung mundur, supaya uji tidak menunggu 4 detik
+    majuHitung: 3700, // memangkas hitung mundur awal, supaya uji tidak menunggu 4 detik
     catatan: [],
   };
   const salin = (x) => (x === undefined ? null : JSON.parse(JSON.stringify(x)));
@@ -35,6 +33,7 @@ function pasangPalsu() {
     S.gagal = null;
     throw galat(jenis);
   };
+  const ATUR = { kesulitan: 'medium', target: 3, sistem: 'rebutan', rev: 0 };
   S.kabari = kabari;
   S.sekarang = sekarang;
   // Mengubah room seolah-olah dari HP lawan.
@@ -42,27 +41,52 @@ function pasangPalsu() {
     fn(S.rooms[kode], sekarang());
     kabari(kode);
   };
+  // Waktu server dimajukan, misalnya untuk melewati jeda antarronde atau menghabiskan timer.
+  S.maju = (ms) => {
+    S.selisih += ms;
+    Object.keys(S.rooms).forEach(kabari);
+  };
   S.aturSambung = (ya) => {
     S.tersambung = ya;
     [...S.sambung].forEach((fn) => fn(ya));
   };
   // Room buatan lawan, siap dimasuki pemain ini.
-  S.roomLawan = (kode, kesulitan, nama) => {
-    const puzzle = D.pilihPuzzle(window.DataLevel, kesulitan);
+  S.roomLawan = (kode, atur, nama) => {
     S.rooms[kode] = {
-      v: D.VERSI, dibuat: sekarang(), tuan: 'uid-lawan', kesulitan, ...puzzle,
+      v: D.VERSI, dibuat: sekarang(), tuan: 'uid-lawan', sidik: D.sidikKumpulan(window.DataLevel),
+      atur: { ...ATUR, ...atur },
       pemain: { 'uid-lawan': { nama, tersambung: true } },
     };
   };
+  S.lawanGabung = (kode, nama) => S.ubah(kode, (room) => {
+    room.tamu = 'uid-lawan';
+    room.pemain['uid-lawan'] = { nama, tersambung: true };
+  });
+  S.lawanSiap = (kode) => S.ubah(kode, (room) => { room.pemain['uid-lawan'].siap = room.atur.rev; });
+  // Lawan (sebagai pembuat room) memulai pertandingan.
+  S.lawanMulai = (kode) => S.ubah(kode, (room, t) => {
+    room.mulaiPada = t - S.majuHitung;
+    room.puzzle = D.pilihDaftarPuzzle(window.DataLevel, room.atur);
+  });
+  S.puzzle = (kode, r) => D.ambilDaftarPuzzle(window.DataLevel, S.rooms[kode])[r];
+  // Lawan mengunci jawaban benar untuk ronde r.
+  S.lawanJawab = (kode, r) => S.ubah(kode, (room, t) => {
+    room.ronde = room.ronde || {};
+    room.ronde[r] = room.ronde[r] || {};
+    room.ronde[r]['uid-lawan'] = { papan: D.solusi(S.puzzle(kode, r)).slice(), pada: t };
+  });
   window.__palsu = S;
   window.Online = {
     masuk: () => nanti(() => { coba(); return S.uid; }),
-    buatRoom: ({ nama, kesulitan }) => nanti(() => {
+    buatRoom: ({ nama, atur }) => nanti(() => {
       coba();
       const kode = S.kodeBerikut.shift() || D.buatKode();
-      const puzzle = D.pilihPuzzle(window.DataLevel, kesulitan);
-      S.rooms[kode] = { v: D.VERSI, dibuat: sekarang(), tuan: S.uid, kesulitan, ...puzzle, pemain: { [S.uid]: { nama, tersambung: true } } };
-      S.catatan.push(['buat', kode, kesulitan, nama]);
+      S.rooms[kode] = {
+        v: D.VERSI, dibuat: sekarang(), tuan: S.uid, sidik: D.sidikKumpulan(window.DataLevel),
+        atur: { ...atur, rev: 0 },
+        pemain: { [S.uid]: { nama, tersambung: true } },
+      };
+      S.catatan.push(['buat', kode, salin(atur), nama]);
       return kode;
     }),
     gabungRoom: (kode, nama) => nanti(() => {
@@ -72,7 +96,7 @@ function pasangPalsu() {
       if (room.tamu && (room.tuan === S.uid || room.tamu === S.uid)) return;
       if (room.tuan === S.uid) throw galat('sendiri');
       if (room.tamu) throw galat('penuh');
-      if (!D.ambilPuzzle(window.DataLevel, room)) throw galat('versi');
+      if (room.v !== D.VERSI || room.sidik !== D.sidikKumpulan(window.DataLevel)) throw galat('versi');
       if (D.kedaluwarsa(room, sekarang())) throw galat('kedaluwarsa');
       room.tamu = S.uid;
       room.pemain[S.uid] = { nama, tersambung: true };
@@ -86,16 +110,42 @@ function pasangPalsu() {
     },
     hadir: (kode) => { S.catatan.push(['hadir', kode]); },
     berhentiHadir: () => {},
-    mulai: (kode) => nanti(() => {
-      S.rooms[kode].mulaiPada = sekarang() - S.majuHitung;
-      S.catatan.push(['mulai', kode]);
+    ubahAtur: (kode, atur) => nanti(() => {
+      const room = S.rooms[kode];
+      if (room.tuan !== S.uid || room.mulaiPada || atur.rev <= room.atur.rev) throw galat('ditolak');
+      room.atur = salin(atur);
+      S.catatan.push(['atur', kode, salin(atur)]);
       kabari(kode);
     }),
-    kirimJawaban: (kode, kawat) => nanti(() => {
+    aturSiap: (kode, nilai) => nanti(() => {
+      S.rooms[kode].pemain[S.uid].siap = nilai;
+      S.catatan.push(['siap', kode, nilai]);
+      kabari(kode);
+    }),
+    mulai: (kode, daftar) => nanti(() => {
       const room = S.rooms[kode];
-      room.jawaban = room.jawaban || {};
-      room.jawaban[S.uid] = { papan: kawat, pada: sekarang() };
-      S.catatan.push(['jawab', kode, kawat]);
+      if (room.mulaiPada) throw galat('ditolak');
+      room.mulaiPada = sekarang() - S.majuHitung;
+      room.puzzle = salin(daftar);
+      S.catatan.push(['mulai', kode, daftar.length]);
+      kabari(kode);
+    }),
+    kirimJawaban: (kode, ronde, kawat) => nanti(() => {
+      if (S.tolakJawab > 0) {
+        S.tolakJawab -= 1;
+        S.catatan.push(['jawab-ditolak', kode, ronde]);
+        throw galat('ditolak');
+      }
+      const room = S.rooms[kode];
+      room.ronde = room.ronde || {};
+      room.ronde[ronde] = room.ronde[ronde] || {};
+      room.ronde[ronde][S.uid] = { papan: kawat, pada: sekarang() };
+      S.catatan.push(['jawab', kode, ronde, kawat]);
+      kabari(kode);
+    }),
+    kirimMaju: (kode, nilai) => nanti(() => {
+      S.rooms[kode].pemain[S.uid].maju = nilai;
+      S.catatan.push(['maju', kode, nilai]);
       kabari(kode);
     }),
     menyerah: (kode) => nanti(() => {
@@ -136,8 +186,9 @@ function pasangPalsu() {
 }
 
 module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHalaman, klik, teksDi, FOTO }) {
-  console.log('\n== Duel online (lawan dan server ditirukan) ==');
+  console.log('\n== Duel online beronde (lawan dan server ditirukan) ==');
 
+  const JEDA_RONDE = 5000;
   const buka = async (viewport = { width: 390, height: 844 }) => {
     const page = await bukaHalaman(browser, viewport, galat);
     await page.evaluate(pasangPalsu);
@@ -160,42 +211,70 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
     const el = document.querySelector('.toast:not(.keluar)');
     return el ? { teks: el.querySelector('.toast-teks').textContent, sub: (el.querySelector('.toast-sub') || {}).textContent || null } : null;
   });
+  const semuaToast = (page) => page.evaluate(() => [...document.querySelectorAll('.toast .toast-teks')].map((e) => e.textContent));
   const keLobi = async (page, nama = 'Bima') => {
     await klik(page, 'tombol-online');
     await tidur(500);
     if (nama !== null) await isiNama(page, nama);
   };
-  // Pemain ini membuat room, lalu lawan bergabung dan duel dimulai.
-  const mulaiSebagaiTuan = async (page, { kesulitan = 'medium', kode = 'ABCDE', lawan = 'Budi' } = {}) => {
-    await palsu(page, (k) => { window.__palsu.kodeBerikut.push(k); window.__palsu.majuHitung = 3700; }, kode);
+  const pilihAtur = (page, bagian, nilai) => page.evaluate((b, v) => document.querySelector(`#atur-tunggu [data-atur="${b}"][data-nilai="${v}"]`).click(), bagian, String(nilai));
+  const aturTampil = (page) => page.evaluate(() => Object.fromEntries(['kesulitan', 'target', 'sistem'].map((b) => {
+    const aktif = document.querySelector(`#atur-tunggu [data-atur="${b}"][aria-checked="true"]`);
+    return [b, aktif ? aktif.dataset.nilai : null];
+  })));
+  const ruang = (page) => page.evaluate(() => {
+    const tampil = (id) => !document.getElementById(id).hidden;
+    return {
+      judul: document.getElementById('judul-tunggu').textContent,
+      status: document.getElementById('status-tunggu').textContent,
+      catatan: document.getElementById('catatan-tunggu').textContent,
+      kode: tampil('kode-room') ? document.getElementById('kode-room').textContent : null,
+      bagi: tampil('tombol-bagi-kode'),
+      pemain: tampil('pemain-tunggu'),
+      atur: tampil('atur-tunggu'),
+      siap: tampil('tombol-siap') ? document.getElementById('tombol-siap').textContent : null,
+      keluar: tampil('tombol-batal-room'),
+      saya: `${document.getElementById('nama-saya-tunggu').textContent}|${document.getElementById('siap-saya').textContent}`,
+      lawan: `${document.getElementById('nama-lawan-tunggu').textContent}|${document.getElementById('siap-lawan').textContent}`,
+      info: document.getElementById('info-atur').textContent,
+      terkunci: [...document.querySelectorAll('#atur-tunggu [data-atur]')].every((b) => b.getAttribute('aria-disabled') === 'true'),
+    };
+  });
+  const papanTampil = (page, ms = 6000) => tunggu(page, () => !document.getElementById('layar-solo').hidden && !document.getElementById('layar-solo').classList.contains('pergi') && document.querySelectorAll('.slot').length === 9 && /^Duel · /.test(document.getElementById('judul-level').textContent) && !document.querySelector('.slot').disabled, ms);
+  // Pemain ini membuat room, lawan bergabung, keduanya siap, lalu pertandingan dimulai.
+  const mulaiSebagaiTuan = async (page, { atur = {}, kode = 'ABCDE', lawan = 'Budi' } = {}) => {
+    await page.evaluate((a, k) => {
+      localStorage.setItem('setdoku-atur-duel', JSON.stringify({ kesulitan: 'medium', target: 3, sistem: 'rebutan', ...a }));
+      window.__palsu.kodeBerikut.push(k);
+    }, atur, kode);
     await keLobi(page);
-    await page.evaluate((k) => document.querySelector(`#segmen-kesulitan [data-kesulitan="${k}"]`).click(), kesulitan);
     await klik(page, 'tombol-buat-room');
     await tunggu(page, () => /Menunggu lawan/.test(document.getElementById('status-tunggu').textContent));
-    await palsu(page, (k, nama) => window.__palsu.ubah(k, (room) => {
-      room.tamu = 'uid-lawan';
-      room.pemain['uid-lawan'] = { nama, tersambung: true };
-    }), kode, lawan);
-    await tunggu(page, () => !document.getElementById('layar-solo').hidden && document.querySelectorAll('.slot').length === 9);
+    await palsu(page, (k, nama) => { window.__palsu.lawanGabung(k, nama); window.__palsu.lawanSiap(k); }, kode, lawan);
+    await tunggu(page, () => !document.getElementById('tombol-siap').hidden);
+    await klik(page, 'tombol-siap');
+    await papanTampil(page);
     await tidur(700);
     return kode;
   };
-  // Lawan membuat room, lalu pemain ini bergabung dan duel dimulai.
-  const mulaiSebagaiTamu = async (page, { kesulitan = 'medium', kode = 'FGHJK', lawan = 'Budi' } = {}) => {
-    await palsu(page, (k, s, nama) => window.__palsu.roomLawan(k, s, nama), kode, kesulitan, lawan);
+  // Lawan membuat room, pemain ini bergabung, keduanya siap, lalu lawan memulai.
+  const mulaiSebagaiTamu = async (page, { atur = {}, kode = 'FGHJK', lawan = 'Budi' } = {}) => {
+    await palsu(page, (k, a, nama) => window.__palsu.roomLawan(k, a, nama), kode, atur, lawan);
     await keLobi(page);
     await isiKode(page, kode);
     await klik(page, 'tombol-gabung');
-    await tunggu(page, () => /memulai duel/.test(document.getElementById('status-tunggu').textContent));
-    await palsu(page, (k) => window.__palsu.ubah(k, (room, t) => { room.mulaiPada = t - 3700; }), kode);
-    await tunggu(page, () => !document.getElementById('layar-solo').hidden && document.querySelectorAll('.slot').length === 9);
+    await tunggu(page, () => !document.getElementById('tombol-siap').hidden);
+    await klik(page, 'tombol-siap');
+    await tunggu(page, () => /Menunggu .* siap/.test(document.getElementById('status-tunggu').textContent));
+    await palsu(page, (k) => { window.__palsu.lawanSiap(k); window.__palsu.lawanMulai(k); }, kode);
+    await papanTampil(page);
     await tidur(700);
     return kode;
   };
-  const dataPuzzle = (page, kode) => page.evaluate((k) => {
-    const puzzle = DuelOnline.ambilPuzzle(DataLevel, window.__palsu.rooms[k]);
+  const dataPuzzle = (page, kode, r) => page.evaluate((k, n) => {
+    const puzzle = window.__palsu.puzzle(k, n);
     return { papan: puzzle.papan, tersedia: puzzle.tersedia, solusi: DuelOnline.solusi(puzzle) };
-  }, kode);
+  }, kode, r);
   // Memasang kartu lewat ketuk: ketuk kartu tersedia, lalu ketuk slot.
   const pasang = async (page, puzzle, slot, id) => {
     await page.evaluate((n, i) => {
@@ -212,6 +291,39 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
     for (const i of kosong) await pasang(page, puzzle, i, isi[i]);
     await page.waitForFunction(() => !document.querySelector('#lapisan-seret .hantu') && !document.querySelector('.menunggu'), { timeout: 5000 }).catch(() => {});
   };
+  // Menyelesaikan ronde r dengan benar, lalu mengunci.
+  const selesaikan = async (page, kode, r) => {
+    const puzzle = await dataPuzzle(page, kode, r);
+    await isiSemua(page, puzzle);
+    await klik(page, 'tombol-kunci');
+    return puzzle;
+  };
+  const bilah = (page) => page.evaluate(() => ({
+    tampil: !document.getElementById('bilah-duel').hidden,
+    saya: document.getElementById('skor-saya').textContent,
+    lawan: document.getElementById('skor-lawan').textContent,
+    info: document.getElementById('info-duel').textContent,
+    nama: document.getElementById('nama-lawan-duel').textContent,
+    titik: document.querySelectorAll('#titik-lawan i').length,
+    isi: document.querySelectorAll('#titik-lawan i.isi').length,
+    label: document.getElementById('titik-lawan').getAttribute('aria-label'),
+  }));
+  const lapis = (page) => page.evaluate(() => (document.getElementById('lapis-ronde').hidden ? null : {
+    judul: document.getElementById('judul-ronde').textContent,
+    skor: document.getElementById('skor-ronde').textContent,
+    mundur: document.getElementById('mundur-ronde').textContent,
+    kelas: document.getElementById('lapis-ronde').className,
+  }));
+  const adaLapis = (page, pola, ms = 4000) => tunggu(page, (p) => !document.getElementById('lapis-ronde').hidden && new RegExp(p).test(document.getElementById('judul-ronde').textContent), ms, pola);
+  const rondeTampil = (page, teks, ms = 4000) => tunggu(page, (t) => document.getElementById('lapis-ronde').hidden && document.getElementById('info-duel').textContent === t && !document.querySelector('.slot').disabled, ms, teks);
+  const majuWaktu = (page, ms) => palsu(page, (n) => window.__palsu.maju(n), ms);
+  // Memajukan waktu server sampai tepat lewat tenggat timer yang sedang berjalan.
+  const keTenggat = (page, kode) => palsu(page, (k) => {
+    const S = window.__palsu;
+    const keadaan = DuelOnline.keadaan(S.rooms[k], DataLevel, S.uid, S.sekarang());
+    S.maju(keadaan.tenggat - S.sekarang() + 100);
+  }, kode);
+  const idPapan = (page) => page.evaluate(() => [...document.querySelectorAll('.slot')].map((s) => s.getAttribute('aria-label')).join('|'));
   const hasilTampil = (page) => page.evaluate(() => ({
     judul: document.getElementById('judul-hasil').textContent,
     kelas: document.getElementById('judul-hasil').className,
@@ -223,13 +335,14 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
     stars: !document.getElementById('stars-hasil').hidden,
     nyawa: !document.getElementById('nyawa-hasil').hidden,
   }));
-  const adaHasil = (page) => page.waitForSelector('#layar-hasil:not([hidden])', { timeout: 6000 }).then(() => tidur(450));
+  const adaHasil = (page, ms = 6000) => page.waitForSelector('#layar-hasil:not([hidden])', { timeout: ms }).then(() => tidur(450), () => {});
 
   /* Lobi */
   {
     const page = await buka();
     await keLobi(page, null);
     cek('menu: Duel online membuka lobi', await terlihat(page, 'online-lobi') && !(await terlihat(page, 'online-tunggu')));
+    cek('lobi: pengaturan pertandingan tidak lagi dipilih di lobi', await page.evaluate(() => !document.querySelector('#online-lobi .segmen') && /ruang tunggu/.test(document.getElementById('online-lobi').textContent)));
     await page.screenshot({ path: path.join(FOTO, 'online-lobi.png') });
 
     await klik(page, 'tombol-buat-room');
@@ -259,24 +372,19 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
     const sibuk = await page.evaluate(() => document.getElementById('layar-online').classList.contains('sibuk'));
     cek('lobi: gagal tersambung dijelaskan, dan tombol bisa ditekan lagi', /Tidak bisa tersambung/.test(await galatTampil(page) || '') && !sibuk && (await teksDi(page, 'tombol-buat-room')) === 'Buat room', String(await galatTampil(page)));
 
-    const waktu = [];
-    for (const k of ['easy', 'medium', 'hard']) {
-      await page.evaluate((x) => document.querySelector(`#segmen-kesulitan [data-kesulitan="${x}"]`).click(), k);
-      waktu.push((await teksDi(page, 'info-kesulitan')).match(/\d+:\d\d/)[0]);
-    }
-    cek('lobi: waktu mengikuti tingkat kesulitan', waktu.join() === '3:00,5:00,8:00', waktu.join());
-
-    // Room penuh dan room versi lain.
+    // Room penuh, room versi lain, dan kode kedaluwarsa.
     await palsu(page, () => {
       const S = window.__palsu;
-      S.roomLawan('PENHH', 'easy', 'Budi');
+      S.roomLawan('PENHH', {}, 'Budi');
       S.rooms.PENHH.tamu = 'uid-orang-lain';
-      S.roomLawan('VERSH', 'easy', 'Budi');
+      S.roomLawan('VERSH', {}, 'Budi');
       S.rooms.VERSH.sidik += 1;
-      S.roomLawan('LAMAA', 'easy', 'Budi');
+      S.roomLawan('VERS2', {}, 'Budi');
+      S.rooms.VERS2.v = 1;
+      S.roomLawan('LAMAA', {}, 'Budi');
       S.rooms.LAMAA.dibuat -= 11 * 60 * 1000;
     });
-    for (const [kode, pola, nama] of [['PENHH', /sudah berisi dua pemain/, 'room penuh'], ['VERSH', /Versi game kamu berbeda/, 'versi game berbeda'], ['LAMAA', /kedaluwarsa/, 'kode kedaluwarsa']]) {
+    for (const [kode, pola, nama] of [['PENHH', /sudah berisi dua pemain/, 'room penuh'], ['VERSH', /Versi game kamu berbeda/, 'isi puzzle berbeda'], ['VERS2', /Versi game kamu berbeda/, 'room dari versi game lama'], ['LAMAA', /kedaluwarsa/, 'kode kedaluwarsa']]) {
       await isiKode(page, kode);
       await klik(page, 'tombol-gabung');
       await tunggu(page, (p) => new RegExp(p).test(document.getElementById('galat-online').textContent), 3000, pola.source);
@@ -286,7 +394,7 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
     // Room buatan sendiri: dua tab di browser yang sama tidak bisa saling melawan.
     await palsu(page, () => {
       const S = window.__palsu;
-      S.roomLawan('SENDR', 'easy', 'Bima');
+      S.roomLawan('SENDR', {}, 'Bima');
       S.rooms.SENDR.tuan = S.uid;
       S.rooms.SENDR.pemain = { [S.uid]: { nama: 'Bima', tersambung: true } };
     });
@@ -297,75 +405,170 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
 
     await klik(page, 'tombol-online-keluar');
     const diMenu = await tunggu(page, () => !document.getElementById('layar-menu').hidden && document.getElementById('layar-online').hidden, 3000);
-    cek('lobi: tombol keluar kembali ke menu', diMenu, await page.evaluate(() => JSON.stringify({ menu: document.getElementById('layar-menu').hidden, online: document.getElementById('layar-online').hidden, galat: document.getElementById('galat-online').textContent })));
+    cek('lobi: tombol keluar kembali ke menu', diMenu);
     await klik(page, 'tombol-online');
     await tidur(500);
     cek('lobi: username diingat saat dibuka lagi', await page.evaluate(() => document.getElementById('input-nama').value === 'Bima Sena'));
     await page.close();
   }
 
-  /* Pembuat room: ruang tunggu, kunci salah, lalu menang */
+  /* Ruang tunggu: pembuat room mengatur pertandingan, lalu keduanya menekan Siap */
   {
     const page = await buka();
     await palsu(page, () => { window.__palsu.kodeBerikut.push('ABCDE'); });
     await keLobi(page);
     await klik(page, 'tombol-buat-room');
     await tunggu(page, () => /Menunggu lawan/.test(document.getElementById('status-tunggu').textContent));
-    const tungguAwal = await page.evaluate(() => ({
-      kode: document.getElementById('kode-room').textContent,
-      kodeTampil: !document.getElementById('kode-room').hidden,
-      bagi: !document.getElementById('tombol-bagi-kode').hidden,
-      batal: !document.getElementById('tombol-batal-room').hidden,
-      catatan: document.getElementById('catatan-tunggu').textContent,
-    }));
-    cek('ruang tunggu: kode room tampil dan bisa dibagikan', tungguAwal.kode === 'ABCDE' && tungguAwal.kodeTampil && tungguAwal.bagi && tungguAwal.batal && /10 menit/.test(tungguAwal.catatan), JSON.stringify(tungguAwal));
-    cek('ruang tunggu: kehadiran dipasang untuk room ini', (await catatan(page, 'hadir')).some((c) => c[1] === 'ABCDE'));
+    let r = await ruang(page);
+    cek('T-1: ruang tunggu menampilkan kode, tombol bagikan, pemain, dan pengaturan', r.kode === 'ABCDE' && r.bagi && r.pemain && r.atur && r.keluar && r.judul === 'Bagikan kode ini ke temanmu', JSON.stringify(r));
+    cek('T-1: sebelum ada lawan, kartunya kosong dan tombol Siap belum ada', r.saya === 'Bima|Kamu' && r.lawan === 'Belum ada lawan|Menunggu…' && r.siap === null, JSON.stringify(r));
+    cek('pengaturan awal: Sedang, 3 poin, Rebutan', JSON.stringify(await aturTampil(page)) === JSON.stringify({ kesulitan: 'medium', target: '3', sistem: 'rebutan' }) && /Paling banyak 5 ronde, 5:00 per ronde/.test(r.info) && !r.terkunci, r.info);
     await page.screenshot({ path: path.join(FOTO, 'online-tunggu.png') });
 
-    // Lawan bergabung tetapi belum tersambung: duel belum dimulai.
-    await palsu(page, () => window.__palsu.ubah('ABCDE', (room) => {
-      room.tamu = 'uid-lawan';
-      room.pemain['uid-lawan'] = { nama: 'Budi', tersambung: false };
-    }));
-    await tidur(600);
-    cek('ruang tunggu: duel tidak dimulai selama lawan belum tersambung', (await catatan(page, 'mulai')).length === 0 && /Menunggu Budi tersambung/.test(await teksDi(page, 'status-tunggu')), await teksDi(page, 'status-tunggu'));
-    await palsu(page, () => window.__palsu.ubah('ABCDE', (room) => { room.pemain['uid-lawan'].tersambung = true; }));
-    await tunggu(page, () => !document.getElementById('angka-mundur').hidden);
-    const hitung = await page.evaluate(() => ({
-      angka: document.getElementById('angka-mundur').textContent,
-      judul: document.getElementById('judul-tunggu').textContent,
-      kode: document.getElementById('kode-room').hidden,
-      batal: document.getElementById('tombol-batal-room').hidden,
-    }));
-    cek('ruang tunggu: pembuat room memulai duel begitu lawan tersambung', (await catatan(page, 'mulai')).length === 1);
-    cek('hitung mundur: angka tampil, kode dan tombol batal hilang', hitung.angka === '3' && hitung.judul === 'Melawan Budi' && hitung.kode && hitung.batal, JSON.stringify(hitung));
-    await page.screenshot({ path: path.join(FOTO, 'online-hitung.png') });
+    const jatah = [];
+    for (const target of [5, 7, 10, 3]) {
+      await pilihAtur(page, 'target', target);
+      await tunggu(page, (t) => document.querySelector(`#atur-tunggu [data-atur="target"][data-nilai="${t}"]`).getAttribute('aria-checked') === 'true', 2000, target);
+      jatah.push((await teksDi(page, 'info-atur')).match(/Paling banyak (\d+) ronde/)[1]);
+    }
+    cek('T-2: jatah ronde mengikuti poin target (9, 13, 19, 5)', jatah.join() === '9,13,19,5', jatah.join());
+    await pilihAtur(page, 'kesulitan', 'easy');
+    await pilihAtur(page, 'target', 5);
+    await pilihAtur(page, 'sistem', 'balapan');
+    await tunggu(page, () => /Balapan/.test(document.getElementById('info-atur').textContent), 2000);
+    const ubahan = await catatan(page, 'atur');
+    const terakhir = ubahan[ubahan.length - 1][2];
+    cek('T-2: pembuat room mengubah pengaturan, dan nomor versinya naik setiap kali', ubahan.length === 7 && ubahan.every((u, i) => u[2].rev === i + 1) && terakhir.kesulitan === 'easy' && terakhir.target === 5 && terakhir.sistem === 'balapan', JSON.stringify(terakhir));
+    cek('T-2: Balapan menjelaskan batas waktu seluruh pertandingan (5 x 3 menit)', /menyelesaikan 5 puzzle menang\. Batas waktu 15:00/.test(await teksDi(page, 'info-atur')), await teksDi(page, 'info-atur'));
+    cek('pengaturan terakhir diingat untuk room berikutnya', await page.evaluate(() => localStorage.getItem('setdoku-atur-duel') === JSON.stringify({ kesulitan: 'easy', target: 5, sistem: 'balapan' })));
+    await pilihAtur(page, 'sistem', 'balapan');
+    await tidur(200);
+    cek('T-2: memilih pengaturan yang sama tidak menulis apa pun', (await catatan(page, 'atur')).length === 7);
 
-    const mulaiTunggu = Date.now();
-    await tunggu(page, () => !document.getElementById('layar-solo').hidden && document.querySelectorAll('.slot').length === 9, 7000);
-    const lamaHitung = Date.now() - mulaiTunggu;
-    cek('hitung mundur: papan tampil setelah sekitar 4 detik', lamaHitung > 2500 && lamaHitung < 5500, `${lamaHitung} ms`);
-    await tidur(800);
+    await palsu(page, () => window.__palsu.lawanGabung('ABCDE', 'Budi'));
+    await tunggu(page, () => !document.getElementById('tombol-siap').hidden);
+    r = await ruang(page);
+    cek('T-3: setelah lawan bergabung, tombol Siap muncul dan kode disembunyikan', r.siap === 'Siap' && r.kode === null && !r.bagi && r.judul === 'Room ABCDE' && r.status === 'Tekan Siap kalau sudah siap.' && r.lawan === 'Budi|Belum siap', JSON.stringify(r));
+    cek('T-5: belum ada yang siap, pertandingan belum dimulai', (await catatan(page, 'mulai')).length === 0);
+
+    await klik(page, 'tombol-siap');
+    await tunggu(page, () => document.getElementById('tombol-siap').textContent === 'Batal siap');
+    r = await ruang(page);
+    cek('T-3: menekan Siap menandai diri siap untuk versi pengaturan ini', (await catatan(page, 'siap')).pop()[2] === 7 && r.saya === 'Bima|Siap' && r.status === 'Menunggu Budi siap…' && await page.evaluate(() => document.getElementById('kartu-saya').classList.contains('siap')), JSON.stringify(r));
+    await klik(page, 'tombol-siap');
+    await tunggu(page, () => document.getElementById('tombol-siap').textContent === 'Siap');
+    cek('T-3: Siap bisa dibatalkan', (await catatan(page, 'siap')).pop()[2] === -1 && (await ruang(page)).saya === 'Bima|Belum siap');
+
+    await palsu(page, () => window.__palsu.lawanSiap('ABCDE'));
+    await tunggu(page, () => /Budi sudah siap/.test(document.getElementById('status-tunggu').textContent));
+    cek('T-3: lawan yang siap terlihat', (await ruang(page)).lawan === 'Budi|Siap' && (await catatan(page, 'mulai')).length === 0);
+    await pilihAtur(page, 'target', 3);
+    await tunggu(page, () => document.getElementById('siap-lawan').textContent === 'Belum siap');
+    r = await ruang(page);
+    cek('T-4: mengubah pengaturan membatalkan tanda siap lawan', r.lawan === 'Budi|Belum siap' && r.status === 'Tekan Siap kalau sudah siap.', JSON.stringify(r));
+    await klik(page, 'tombol-siap');
+    await tunggu(page, () => /Menunggu Budi siap/.test(document.getElementById('status-tunggu').textContent));
+    await tidur(600);
+    cek('T-5: baru satu pemain yang siap, pertandingan belum dimulai', (await catatan(page, 'mulai')).length === 0);
+    await page.screenshot({ path: path.join(FOTO, 'online-tunggu-siap.png') });
+
+    await palsu(page, () => { window.__palsu.majuHitung = 800; window.__palsu.lawanSiap('ABCDE'); });
+    const mundur = await tunggu(page, () => !document.getElementById('angka-mundur').hidden && /^[123]$/.test(document.getElementById('angka-mundur').textContent), 3000);
+    const saatHitung = await ruang(page);
+    const mulai = await catatan(page, 'mulai');
+    cek('T-5: begitu keduanya siap, pertandingan dimulai sekali dengan daftar puzzle-nya', mulai.length === 1 && mulai[0][2] === 3, JSON.stringify(mulai));
+    cek('hitung mundur 3-2-1 tampil, dan pengaturan sudah tidak bisa disentuh', mundur && !saatHitung.atur && !saatHitung.pemain && saatHitung.siap === null && !saatHitung.keluar, JSON.stringify(saatHitung));
+    await page.screenshot({ path: path.join(FOTO, 'online-mundur.png') });
+    cek('setelah hitung mundur, papan ronde pertama tampil', await papanTampil(page, 8000));
+    await tidur(600);
+    const b = await bilah(page);
+    cek('balapan: bilah skor menampilkan poin target dan puzzle lawan', b.tampil && b.saya === '0' && b.lawan === '0' && b.info === 'Sampai 3 poin' && b.nama === 'Budi · puzzle 1', JSON.stringify(b));
+    cek('balapan: timer memakai batas waktu seluruh pertandingan (3 x 3 menit)', /^Duel · (9:00|8:5\d)$/.test(await teksDi(page, 'judul-level')), await teksDi(page, 'judul-level'));
+    await page.close();
+  }
+
+  /* Ruang tunggu: tamu hanya melihat pengaturan */
+  {
+    const page = await buka();
+    await palsu(page, () => window.__palsu.roomLawan('FGHJK', { kesulitan: 'hard', target: 7 }, 'Budi'));
+    await keLobi(page);
+    await isiKode(page, ' fgh-jk ');
+    await klik(page, 'tombol-gabung');
+    await tunggu(page, () => !document.getElementById('tombol-siap').hidden);
+    let r = await ruang(page);
+    cek('tamu: kode dari chat dirapikan, lalu masuk ke ruang tunggu', (await catatan(page, 'gabung')).some((c) => c[1] === 'FGHJK') && r.judul === 'Room FGHJK' && r.kode === null && r.lawan === 'Budi|Belum siap', JSON.stringify(r));
+    cek('T-2: tamu melihat pengaturan, tetapi tidak bisa mengubahnya', r.terkunci && r.catatan === 'Pengaturan dipilih Budi.' && JSON.stringify(await aturTampil(page)) === JSON.stringify({ kesulitan: 'hard', target: '7', sistem: 'rebutan' }) && /13 ronde, 8:00 per ronde/.test(r.info), JSON.stringify(r));
+    await pilihAtur(page, 'target', 3);
+    await page.focus('#segmen-target [aria-checked="true"]').catch(() => {});
+    await page.keyboard.press('ArrowRight');
+    await tidur(300);
+    cek('T-2: ketukan dan keyboard tamu di pengaturan tidak menulis apa pun', (await catatan(page, 'atur')).length === 0 && (await aturTampil(page)).target === '7');
+    await page.screenshot({ path: path.join(FOTO, 'online-tunggu-tamu.png') });
+
+    await klik(page, 'tombol-siap');
+    await tunggu(page, () => /Menunggu Budi siap/.test(document.getElementById('status-tunggu').textContent));
+    await palsu(page, () => window.__palsu.ubah('FGHJK', (room) => { room.atur = { ...room.atur, sistem: 'balapan', rev: 1 }; }));
+    await tunggu(page, () => document.getElementById('siap-saya').textContent === 'Belum siap');
+    r = await ruang(page);
+    const kabar = await semuaToast(page);
+    cek('T-4: pengaturan yang diubah pembuat room membatalkan siap tamu, dan tamu diberi tahu', r.saya === 'Bima|Belum siap' && r.siap === 'Siap' && kabar.includes('Pengaturan diubah') && (await aturTampil(page)).sistem === 'balapan', JSON.stringify(kabar));
+    await klik(page, 'tombol-siap');
+    await tunggu(page, () => /Menunggu Budi siap/.test(document.getElementById('status-tunggu').textContent));
+    cek('T-3: tamu siap untuk versi pengaturan yang baru', (await catatan(page, 'siap')).pop()[2] === 1);
+    await palsu(page, () => window.__palsu.lawanSiap('FGHJK'));
+    await tunggu(page, () => /Keduanya siap/.test(document.getElementById('status-tunggu').textContent));
+    await tidur(600);
+    cek('T-5: tamu tidak menulis waktu mulai', (await catatan(page, 'mulai')).length === 0);
+    await palsu(page, () => window.__palsu.lawanMulai('FGHJK'));
+    cek('tamu: papan tampil setelah pembuat room memulai', await papanTampil(page));
+    await tidur(500);
+    cek('balapan Sulit 7 poin: timer 56 menit', /^Duel · (56:00|55:5\d)$/.test(await teksDi(page, 'judul-level')), await teksDi(page, 'judul-level'));
+    await page.close();
+  }
+
+  /* Rebutan: lima ronde sampai ada pemenang */
+  {
+    const page = await buka();
+    const kode = await mulaiSebagaiTuan(page);
     const awal = await page.evaluate(() => ({
       judul: document.getElementById('judul-level').textContent,
-      timer: !document.getElementById('timer-solo').hidden,
+      pesan: document.getElementById('pesan-solo').textContent,
       hint: document.getElementById('tombol-hint').hidden,
       waktu: document.getElementById('tombol-waktu').hidden,
-      pesan: document.getElementById('pesan-solo').textContent,
-      kunci: document.getElementById('tombol-kunci').textContent,
+      kelas: document.getElementById('layar-solo').className,
     }));
-    cek('papan duel: timer tampil dan judulnya Duel', /^Duel · [45]:\d\d$/.test(awal.judul) && awal.timer, awal.judul);
-    cek('O-6: tidak ada Hint dan Extra Time', awal.hint && awal.waktu);
-    cek('papan duel: pesan menyebut nama lawan', /Budi/.test(awal.pesan), awal.pesan);
+    const puzzle0 = await dataPuzzle(page, kode, 0);
+    let b = await bilah(page);
+    cek('rebutan: papan ronde 1 dengan timer satu ronde (Sedang, 5 menit)', /^Duel · (5:00|4:5\d)$/.test(awal.judul) && /duel/.test(awal.kelas), JSON.stringify(awal));
+    cek('P-1: bilah skor menampilkan 0-0, nomor ronde, dan nama lawan', b.tampil && b.saya === '0' && b.lawan === '0' && b.info === 'Ronde 1/5' && b.nama === 'Budi', JSON.stringify(b));
+    cek('P-2: titik progres lawan sebanyak slot kosong, semuanya masih padam', b.titik === kosongDari(puzzle0).length && b.isi === 0 && b.label === `Budi sudah mengisi 0 dari ${b.titik} slot`, JSON.stringify(b));
+    cek('O-6: tanpa Hint dan Extra Time', awal.hint && awal.waktu && awal.pesan === 'Kunci jawaban benar lebih dulu dari Budi.', JSON.stringify(awal));
+    cek('daftar puzzle pertandingan: 5 ronde, semuanya berbeda', await page.evaluate((k) => {
+      const d = DuelOnline.ambilDaftarPuzzle(DataLevel, window.__palsu.rooms[k]);
+      return !!d && d.length === 5 && new Set(d).size === 5;
+    }, kode));
+
+    // Progres: yang dikirim hanya jumlah slot terisi.
+    const kosong0 = kosongDari(puzzle0);
+    await pasang(page, puzzle0, kosong0[0], puzzle0.solusi[kosong0[0]]);
+    await pasang(page, puzzle0, kosong0[1], puzzle0.solusi[kosong0[1]]);
+    await tidur(500);
+    const maju = await catatan(page, 'maju');
+    cek('P-2: jumlah slot terisi dilaporkan ke lawan, tanpa kartunya', maju.length >= 2 && maju[0][2] === 0 && maju[maju.length - 1][2] === 2 && maju.every((m) => typeof m[2] === 'number'), JSON.stringify(maju));
+    await palsu(page, (k) => window.__palsu.ubah(k, (room) => { room.pemain['uid-lawan'].maju = 3; }), kode);
+    await tunggu(page, () => document.querySelectorAll('#titik-lawan i.isi').length === 3, 2000);
+    b = await bilah(page);
+    cek('P-2: progres lawan menyala di bilah skor', b.isi === 3 && b.label === `Budi sudah mengisi 3 dari ${b.titik} slot`, JSON.stringify(b));
     await page.screenshot({ path: path.join(FOTO, 'online-papan.png') });
 
-    const puzzle = await dataPuzzle(page, 'ABCDE');
-    await page.keyboard.press('h');
-    await tidur(200);
-    cek('O-6: tombol H tidak membuka kartu', (await page.evaluate(() => document.querySelectorAll('.slot.tetap').length)) === puzzle.papan.filter((k) => k !== null).length);
-
-    // Kunci salah: dibekukan, tanpa letak kesalahan, dan papan tidak dikirim.
-    await isiSemua(page, puzzle, { tukar: true });
+    // Kunci salah: tombol beku 7 detik, dan tidak ada yang dikirim.
+    await page.evaluate((x, y) => {
+      const slot = document.querySelectorAll('.slot');
+      slot[x].click();
+      slot[y].click();
+    }, kosong0[0], kosong0[1]);
+    await tidur(400);
+    await isiSemua(page, puzzle0, { tukar: true });
     await klik(page, 'tombol-kunci');
     await tidur(300);
     const salah = await page.evaluate(() => ({
@@ -373,57 +576,96 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
       mati: document.getElementById('tombol-kunci').getAttribute('aria-disabled'),
       garis: document.querySelectorAll('.garis-sorot, .slot.gagal').length,
       pesan: document.getElementById('pesan-solo').textContent,
-      hasil: document.getElementById('layar-hasil').hidden,
     }));
     const toastSalah = await toast(page);
-    cek('O-4: kunci salah membekukan tombol kunci 5 detik', /^Tunggu [45] detik$/.test(salah.kunci) && salah.mati === 'true', JSON.stringify(salah));
-    cek('O-4: letak kesalahan tidak ditunjukkan', salah.garis === 0 && salah.pesan === 'Jawaban belum benar.', JSON.stringify(salah));
-    cek('O-4: pesan melayang menjelaskan penaltinya', !!toastSalah && toastSalah.teks === 'Jawaban belum benar' && /dibekukan 5 detik/.test(toastSalah.sub || ''), JSON.stringify(toastSalah));
-    cek('O-10: papan yang salah tidak dikirim ke server', (await catatan(page, 'jawab')).length === 0 && salah.hasil);
+    cek('K-5: kunci salah membekukan tombol kunci 7 detik', /^Tunggu [67] detik$/.test(salah.kunci) && salah.mati === 'true', JSON.stringify(salah));
+    cek('kunci salah: letak kesalahan tidak ditunjukkan', salah.garis === 0 && salah.pesan === 'Jawaban belum benar.', JSON.stringify(salah));
+    cek('kunci salah: pesan melayang menjelaskan penaltinya', !!toastSalah && toastSalah.teks === 'Jawaban belum benar' && /dibekukan 7 detik/.test(toastSalah.sub || ''), JSON.stringify(toastSalah));
+    cek('K-4: kunci salah tidak dikirim dan tidak diumumkan ke lawan', (await catatan(page, 'jawab')).length === 0 && await page.evaluate((k) => Object.keys(window.__palsu.rooms[k].pemain['uid-saya']).sort().join() === 'maju,nama,siap,tersambung', kode));
     await page.screenshot({ path: path.join(FOTO, 'online-beku.png') });
-    // Jam halaman dimundurkan, supaya pembekuan 5 detik tidak habis selagi uji memasang kartu.
+    // Jam halaman dimundurkan, supaya pembekuan tidak habis selagi uji memasang kartu.
     await page.evaluate(() => {
       window.__jamAsli = performance.now.bind(performance);
       performance.now = () => window.__jamAsli() - 30000;
     });
-
-    // Papan dibetulkan saat masih beku: kunci tetap ditolak.
-    const [a, b] = kosongDari(puzzle);
     await page.evaluate((x, y) => {
       const slot = document.querySelectorAll('.slot');
       slot[x].click();
       slot[y].click();
-    }, a, b);
+    }, kosong0[0], kosong0[1]);
     await tidur(400);
-    await pasang(page, puzzle, a, puzzle.solusi[a]);
-    await pasang(page, puzzle, b, puzzle.solusi[b]);
+    await pasang(page, puzzle0, kosong0[0], puzzle0.solusi[kosong0[0]]);
+    await pasang(page, puzzle0, kosong0[1], puzzle0.solusi[kosong0[1]]);
     await tidur(500);
     await klik(page, 'tombol-kunci');
     await tidur(250);
     const ditolak = await toast(page);
-    cek('O-4: selama beku, kunci ditolak walau papan sudah benar', (await catatan(page, 'jawab')).length === 0 && !!ditolak && /^Tunggu \d+ detik lagi$/.test(ditolak.teks), JSON.stringify(ditolak));
-
-    // Jam halaman dimajukan melewati masa beku.
-    await page.evaluate(() => {
-      performance.now = () => window.__jamAsli() + 5500;
-    });
+    cek('selama beku, kunci ditolak walau papan sudah benar', (await catatan(page, 'jawab')).length === 0 && !!ditolak && /^Tunggu \d+ detik lagi$/.test(ditolak.teks), JSON.stringify(ditolak));
+    await page.evaluate(() => { performance.now = () => window.__jamAsli() + 7500; });
     await tunggu(page, () => document.getElementById('tombol-kunci').textContent === 'Kunci jawaban', 3000);
-    cek('O-4: setelah 5 detik tombol kunci menyala lagi', await page.evaluate(() => document.getElementById('tombol-kunci').getAttribute('aria-disabled') === 'false'));
+    cek('K-5: setelah 7 detik tombol kunci menyala lagi', await page.evaluate(() => document.getElementById('tombol-kunci').getAttribute('aria-disabled') === 'false'));
 
+    // Ronde 1: pemain ini mengunci benar lebih dulu.
     const progresSebelum = await page.evaluate(() => localStorage.getItem('setdoku-progres'));
     await klik(page, 'tombol-kunci');
+    const menang1 = await adaLapis(page, '^Kamu menang ronde 1$');
+    let l = await lapis(page);
+    const kiriman = await catatan(page, 'jawab');
+    cek('S1-1: jawaban benar dikirim untuk ronde 1, dan pemain ini dapat 1 poin', menang1 && kiriman.length === 1 && kiriman[0][2] === 0 && kiriman[0][3].join() === puzzle0.solusi.join() && l.skor === '1 – 0', JSON.stringify(l));
+    cek('S1-2: lapisan antarronde menghitung mundur ke ronde 2', /^Ronde 2 mulai dalam [1-5]$/.test(l.mundur) && /menang/.test(l.kelas) && (await bilah(page)).saya === '1', JSON.stringify(l));
+    cek('S1-2: papan terkunci selama jeda', await page.evaluate(() => [...document.querySelectorAll('.slot')].every((s) => s.disabled)));
+    await page.screenshot({ path: path.join(FOTO, 'online-jeda-ronde.png') });
+    await tidur(700);
+    cek('S1-2: ronde 2 belum mulai sebelum jedanya habis', (await lapis(page)) !== null && (await bilah(page)).info === 'Ronde 2/5');
+    await majuWaktu(page, JEDA_RONDE);
+    const ronde2 = await rondeTampil(page, 'Ronde 2/5');
+    const puzzle1 = await dataPuzzle(page, kode, 1);
+    cek('S1-2: ronde 2 tampil dengan puzzle baru, papan kosong, dan timer penuh', ronde2 && puzzle1.papan.join() !== puzzle0.papan.join() && await page.evaluate(() => document.querySelectorAll('.slot.terisi').length === 0) && /^Duel · (5:00|4:5\d)$/.test(await teksDi(page, 'judul-level')), await teksDi(page, 'judul-level'));
+    cek('P-2: titik progres lawan direset di ronde baru', (await bilah(page)).isi === 0 && (await bilah(page)).titik === kosongDari(puzzle1).length);
+    cek('K-5: pembekuan tidak terbawa ke ronde berikutnya', (await teksDi(page, 'tombol-kunci')) === 'Kunci jawaban');
+
+    // Ronde 2: lawan lebih dulu.
+    await pasang(page, puzzle1, kosongDari(puzzle1)[0], puzzle1.solusi[kosongDari(puzzle1)[0]]);
+    await palsu(page, (k) => window.__palsu.lawanJawab(k, 1), kode);
+    const kalah2 = await adaLapis(page, '^Budi menang ronde 2$');
+    l = await lapis(page);
+    cek('S1-1: lawan yang lebih dulu dapat poin ronde itu', kalah2 && l.skor === '1 – 1' && /kalah/.test(l.kelas) && (await bilah(page)).lawan === '1', JSON.stringify(l));
+    cek('S1-1: papan pemain yang kalah cepat ditinggalkan, tanpa mengirim apa pun', (await catatan(page, 'jawab')).length === 1 && await page.evaluate(() => [...document.querySelectorAll('.slot')].every((s) => s.disabled)));
+
+    // Ronde 3: waktu ronde habis, tidak ada poin.
+    await majuWaktu(page, JEDA_RONDE);
+    await rondeTampil(page, 'Ronde 3/5');
+    await keTenggat(page, kode);
+    await tunggu(page, () => /Waktu ronde habis/.test(document.getElementById('pesan-solo').textContent), 3000);
+    cek('K-2: waktu ronde habis, papan terkunci dan tidak ada yang dikirim', (await teksDi(page, 'pesan-solo')) === 'Waktu ronde habis.' && (await catatan(page, 'jawab')).length === 1 && (await semuaToast(page)).includes('Waktu habis!'));
+    await majuWaktu(page, 2000);
+    const kosong3 = await adaLapis(page, '^Ronde 3: tidak ada poin$');
+    l = await lapis(page);
+    cek('K-2: ronde tanpa jawaban benar tidak memberi poin kepada siapa pun', kosong3 && l.skor === '1 – 1' && !/menang|kalah/.test(l.kelas), JSON.stringify(l));
+
+    // Ronde 4 dan 5: pemain ini menang dua kali, dan mencapai 3 poin.
+    await majuWaktu(page, JEDA_RONDE - 2000);
+    await rondeTampil(page, 'Ronde 4/5');
+    await selesaikan(page, kode, 3);
+    await adaLapis(page, '^Kamu menang ronde 4$');
+    cek('rebutan: skor 2-1 setelah ronde 4', (await lapis(page)).skor === '2 – 1');
+    await majuWaktu(page, JEDA_RONDE);
+    await rondeTampil(page, 'Ronde 5/5');
+    await selesaikan(page, kode, 4);
     await adaHasil(page);
     const menang = await hasilTampil(page);
-    const kiriman = await catatan(page, 'jawab');
-    cek('O-1: jawaban benar dikirim satu kali', kiriman.length === 1 && kiriman[0][2].join() === puzzle.solusi.join(), JSON.stringify(kiriman));
-    cek('O-1: mengunci jawaban benar lebih dulu berarti menang', menang.judul === 'Kamu menang!' && menang.detail === 'Kamu mengunci jawaban benar lebih dulu.', JSON.stringify(menang));
-    cek('hasil duel: tombolnya Main lagi dan Keluar', menang.lanjut === 'Main lagi' && menang.tutup === 'Keluar' && !menang.ulang && !menang.practice, JSON.stringify(menang));
+    cek('S1-5: yang pertama mencapai 3 poin menang pertandingan', menang.judul === 'Kamu menang!' && menang.detail === 'Skor akhir 3–1.', JSON.stringify(menang));
+    cek('hasil: tombolnya Main lagi dan Keluar, tanpa lapisan antarronde', menang.lanjut === 'Main lagi' && menang.tutup === 'Keluar' && !menang.ulang && !menang.practice && (await lapis(page)) === null, JSON.stringify(menang));
     cek('O-7: duel online tidak memberi Stars dan tidak memotong nyawa', !menang.stars && !menang.nyawa && (await page.evaluate(() => localStorage.getItem('setdoku-progres'))) === progresSebelum);
+    cek('hasil tidak ditulis siapa pun ke database', await page.evaluate((k) => {
+      const room = window.__palsu.rooms[k];
+      return !room.akhir && !('pemenang' in room) && !('skor' in room) && Object.keys(room.ronde).join() === '0,1,3,4';
+    }, kode));
     await page.screenshot({ path: path.join(FOTO, 'online-menang.png') });
 
     await klik(page, 'tombol-level-peta');
     const diLobi = await tunggu(page, () => document.getElementById('layar-hasil').hidden && document.getElementById('layar-solo').hidden && !document.getElementById('online-lobi').hidden, 3000);
-    cek('hasil duel: Keluar kembali ke lobi', diLobi && await terlihat(page, 'online-lobi'));
+    cek('hasil: Keluar kembali ke lobi', diLobi && await terlihat(page, 'online-lobi'));
 
     // Solo sesudah duel tidak boleh terbawa aturan duel.
     await klik(page, 'tombol-online-keluar');
@@ -438,126 +680,161 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
       timer: document.getElementById('timer-solo').hidden,
       kunci: document.getElementById('tombol-kunci').textContent,
       pesan: document.getElementById('pesan-solo').textContent,
+      bilah: document.getElementById('bilah-duel').hidden,
+      kelas: document.getElementById('layar-solo').className,
+      lapis: document.getElementById('lapis-ronde').hidden,
     }));
-    cek('Practice sesudah duel kembali normal', solo.judul === 'Level 1' && solo.hint && solo.timer && solo.kunci === 'Kunci jawaban' && !/Budi/.test(solo.pesan), JSON.stringify(solo));
+    cek('Practice sesudah duel kembali normal, tanpa bilah skor', solo.judul === 'Level 1' && solo.hint && solo.timer && solo.kunci === 'Kunci jawaban' && !/Budi/.test(solo.pesan) && solo.bilah && solo.lapis && !/duel/.test(solo.kelas), JSON.stringify(solo));
     await page.close();
   }
 
-  /* Tamu: bergabung dengan kode, lalu kalah karena lawan lebih dulu */
+  /* Rebutan: kalah, dan jatah ronde habis */
   {
-    const page = await buka();
-    await palsu(page, () => window.__palsu.roomLawan('FGHJK', 'easy', 'Budi'));
-    await keLobi(page);
-    await isiKode(page, ' fgh-jk ');
-    await klik(page, 'tombol-gabung');
-    await tunggu(page, () => /memulai duel/.test(document.getElementById('status-tunggu').textContent));
-    const siap = await page.evaluate(() => ({
-      judul: document.getElementById('judul-tunggu').textContent,
-      status: document.getElementById('status-tunggu').textContent,
-      kode: document.getElementById('kode-room').hidden,
-      bagi: document.getElementById('tombol-bagi-kode').hidden,
-      batal: !document.getElementById('tombol-batal-room').hidden,
-    }));
-    cek('tamu: kode dari chat dirapikan, lalu masuk ke room', (await catatan(page, 'gabung')).some((c) => c[1] === 'FGHJK'), JSON.stringify(await catatan(page, 'gabung')));
-    cek('tamu: menunggu pembuat room memulai', siap.judul === 'Room FGHJK' && siap.status === 'Menunggu Budi memulai duel…' && siap.kode && siap.bagi && siap.batal, JSON.stringify(siap));
-    cek('tamu: tidak memulai duel sendiri', (await catatan(page, 'mulai')).length === 0);
-
-    await palsu(page, () => window.__palsu.ubah('FGHJK', (room, t) => { room.mulaiPada = t - 3700; }));
-    await tunggu(page, () => !document.getElementById('layar-solo').hidden && document.querySelectorAll('.slot').length === 9);
-    await tidur(700);
-    const judul = await teksDi(page, 'judul-level');
-    cek('tamu: timer mengikuti tingkat room (Mudah, 3 menit)', /^Duel · (3:00|2:5\d)$/.test(judul), judul);
-
-    const puzzle = await dataPuzzle(page, 'FGHJK');
-    await pasang(page, puzzle, kosongDari(puzzle)[0], puzzle.solusi[kosongDari(puzzle)[0]]);
-    await palsu(page, () => window.__palsu.ubah('FGHJK', (room, t) => {
-      const puzzleRoom = DuelOnline.ambilPuzzle(DataLevel, room);
-      room.jawaban = { 'uid-lawan': { papan: DuelOnline.solusi(puzzleRoom).slice(), pada: t } };
-    }));
+    let page = await buka();
+    let kode = await mulaiSebagaiTamu(page, { atur: { kesulitan: 'easy' } });
+    cek('tamu rebutan Mudah: timer 3 menit per ronde', /^Duel · (3:00|2:5\d)$/.test(await teksDi(page, 'judul-level')), await teksDi(page, 'judul-level'));
+    for (let r = 0; r < 3; r++) {
+      await palsu(page, (k, n) => window.__palsu.lawanJawab(k, n), kode, r);
+      if (r < 2) {
+        await adaLapis(page, `^Budi menang ronde ${r + 1}$`);
+        await majuWaktu(page, JEDA_RONDE);
+        await rondeTampil(page, `Ronde ${r + 2}/5`);
+      }
+    }
     await adaHasil(page);
-    const kalah = await hasilTampil(page);
-    cek('O-1: lawan mengunci benar lebih dulu berarti kalah', kalah.judul === 'Kamu kalah' && kalah.detail === 'Budi mengunci jawaban benar lebih dulu.' && /gagal/.test(kalah.kelas), JSON.stringify(kalah));
-    cek('kalah: papan terkunci dan timer berhenti', await page.evaluate(() => [...document.querySelectorAll('.slot')].every((b) => b.disabled) && document.getElementById('tombol-kunci').getAttribute('aria-disabled') === 'true'));
-    cek('kalah: papan pemain ini tidak dikirim', (await catatan(page, 'jawab')).length === 0);
+    let h = await hasilTampil(page);
+    cek('rebutan: lawan yang mencapai 3 poin lebih dulu menang', h.judul === 'Kamu kalah' && /gagal/.test(h.kelas) && h.detail === 'Skor akhir 0–3.', JSON.stringify(h));
     await page.screenshot({ path: path.join(FOTO, 'online-kalah.png') });
+    await page.close();
 
-    // Lawan mengajak main lagi lewat room baru.
-    await palsu(page, () => {
-      const S = window.__palsu;
-      S.roomLawan('MNPQR', 'easy', 'Budi');
-      S.ubah('FGHJK', (room) => { room.lanjut = 'MNPQR'; });
-    });
-    await tunggu(page, () => document.getElementById('tombol-level-lanjut').textContent === 'Gabung ronde berikutnya', 3000);
-    const ajakan = await toast(page);
-    cek('main lagi: ajakan lawan mengubah tombol dan memberi tahu', (await teksDi(page, 'tombol-level-lanjut')) === 'Gabung ronde berikutnya' && !!ajakan && ajakan.teks === 'Budi mengajak main lagi', JSON.stringify(ajakan));
-    await klik(page, 'tombol-level-lanjut');
-    await tunggu(page, () => !document.getElementById('online-tunggu').hidden && /memulai duel/.test(document.getElementById('status-tunggu').textContent));
-    const ronde2 = await page.evaluate(() => ({
-      judul: document.getElementById('judul-tunggu').textContent,
-      hasil: document.getElementById('layar-hasil').hidden || document.getElementById('layar-hasil').classList.contains('pergi'),
-      tamu: window.__palsu.rooms.MNPQR.tamu,
-    }));
-    cek('main lagi: menerima ajakan langsung masuk ke room baru', ronde2.judul === 'Room MNPQR' && ronde2.hasil && ronde2.tamu === SAYA, JSON.stringify(ronde2));
+    // Lima ronde tanpa ada yang mencapai 3 poin: 1 poin lawan, 4 ronde tanpa jawaban.
+    page = await buka();
+    kode = await mulaiSebagaiTuan(page, { atur: { kesulitan: 'easy' } });
+    await palsu(page, (k) => window.__palsu.lawanJawab(k, 0), kode);
+    await adaLapis(page, '^Budi menang ronde 1$');
+    for (let r = 1; r < 5; r++) {
+      await majuWaktu(page, JEDA_RONDE);
+      await rondeTampil(page, `Ronde ${r + 1}/5`);
+      await majuWaktu(page, 3 * 60 * 1000 + 2000);
+      if (r < 4) {
+        await adaLapis(page, `^Ronde ${r + 1}: tidak ada poin$`);
+        await majuWaktu(page, -2000);
+      }
+    }
+    await adaHasil(page);
+    h = await hasilTampil(page);
+    cek('S1-5: jatah ronde habis, poin terbanyak menang', h.judul === 'Kamu kalah' && h.detail === 'Skor akhir 0–1.', JSON.stringify(h));
+    await page.close();
 
-    // Ronde kedua berjalan dengan papan baru.
-    await palsu(page, () => window.__palsu.ubah('MNPQR', (room, t) => { room.mulaiPada = t - 3700; }));
-    const papanBaru = await tunggu(page, () => !document.getElementById('layar-solo').hidden && document.querySelectorAll('.slot.terisi').length === 0 && document.querySelectorAll('.slot').length === 9);
-    cek('main lagi: ronde kedua mulai dengan papan kosong', papanBaru);
+    // Seri: tidak ada yang pernah mengunci benar.
+    page = await buka();
+    kode = await mulaiSebagaiTuan(page, { atur: { kesulitan: 'easy' } });
+    await majuWaktu(page, 5 * (3 * 60 * 1000 + JEDA_RONDE));
+    await adaHasil(page);
+    h = await hasilTampil(page);
+    cek('S1-5: poin sama di akhir jatah ronde berarti seri', h.judul === 'Seri' && /netral/.test(h.kelas) && !/gagal/.test(h.kelas) && h.detail === 'Skor akhir 0–0.', JSON.stringify(h));
+    await page.screenshot({ path: path.join(FOTO, 'online-seri.png') });
     await page.close();
   }
 
-  /* Waktu habis: menang, seri, dan papan lawan yang tidak tiba */
-  for (const kasus of [
-    { nama: 'kartu benar lebih banyak menang', saya: 2, lawan: 1, judul: 'Kamu menang!', detail: 'Waktu habis. Kartu benar: kamu 2, Budi 1.' },
-    { nama: 'kartu benar sama berarti seri', saya: 1, lawan: 1, judul: 'Seri', detail: 'Waktu habis. Kartu benar: kamu 1, Budi 1.' },
-    { nama: 'kartu benar lebih sedikit kalah', saya: 0, lawan: 3, judul: 'Kamu kalah', detail: 'Waktu habis. Kartu benar: kamu 0, Budi 3.' },
-    { nama: 'papan lawan tidak tiba dihitung 0', saya: 1, lawan: null, judul: 'Kamu menang!', detail: 'Waktu habis. Kartu benar: kamu 1, Budi 0.' },
-  ]) {
-    const page = await buka();
-    const kode = await mulaiSebagaiTamu(page, { kesulitan: 'easy' });
-    const puzzle = await dataPuzzle(page, kode);
-    const kosong = kosongDari(puzzle);
-    for (const i of kosong.slice(0, kasus.saya)) await pasang(page, puzzle, i, puzzle.solusi[i]);
-    await tidur(400);
-    // Waktu server dimajukan sampai melewati tenggat.
-    await palsu(page, (k) => {
-      const S = window.__palsu;
-      S.selisih += DuelOnline.tenggat(S.rooms[k]) - S.sekarang() + 50;
-    }, kode);
-    await tunggu(page, () => window.__palsu.catatan.some((c) => c[0] === 'jawab'), 3000);
-    const kiriman = (await catatan(page, 'jawab'))[0];
-    const harapan = puzzle.papan.map((k, i) => (k !== null ? k : kosong.indexOf(i) < kasus.saya ? puzzle.solusi[i] : -1));
-    const habis = await page.evaluate(() => ({
-      pesan: document.getElementById('pesan-solo').textContent,
-      judul: document.getElementById('judul-level').textContent,
-      mati: [...document.querySelectorAll('.slot')].every((b) => b.disabled),
-    }));
-    if (kasus.lawan === null) {
-      cek('O-3: waktu habis mengirim papan apa adanya, slot kosong ditulis -1', !!kiriman && kiriman[2].join() === harapan.join(), JSON.stringify(kiriman));
-      cek('O-3: waktu habis mengunci papan dan menunggu hasil', habis.mati && habis.judul === 'Duel · 0:00' && /Menghitung hasil/.test(habis.pesan), JSON.stringify(habis));
-      cek('O-3: hasil belum diumumkan selama papan lawan masih ditunggu', await page.evaluate(() => document.getElementById('layar-hasil').hidden));
-      await palsu(page, () => { window.__palsu.selisih += DuelOnline.TENGGANG_KIRIM_MS + DuelOnline.JEDA_AMAN_MS; });
-    } else {
-      await palsu(page, (k, n) => window.__palsu.ubah(k, (room) => {
-        const puzzleRoom = DuelOnline.ambilPuzzle(DataLevel, room);
-        const kunci = DuelOnline.solusi(puzzleRoom);
-        let sisa = n;
-        const papan = puzzleRoom.papan.map((kartu, i) => {
-          if (kartu !== null) return kartu;
-          if (sisa > 0) { sisa -= 1; return kunci[i]; }
-          return -1;
-        });
-        room.jawaban = room.jawaban || {};
-        room.jawaban['uid-lawan'] = { papan, pada: DuelOnline.tenggat(room) + 300 };
-      }), kode, kasus.lawan);
+  /* Balapan */
+  {
+    let page = await buka();
+    let kode = await mulaiSebagaiTamu(page, { atur: { kesulitan: 'easy', sistem: 'balapan' } });
+    let b = await bilah(page);
+    const papan0 = await idPapan(page);
+    cek('balapan: pesan dan bilah menjelaskan tujuannya', b.info === 'Sampai 3 poin' && b.nama === 'Budi · puzzle 1' && (await teksDi(page, 'pesan-solo')) === 'Selesaikan 3 puzzle lebih dulu dari Budi.', JSON.stringify(b));
+
+    // Pemain ini menyelesaikan puzzle 1, dan langsung lanjut tanpa menunggu lawan.
+    await selesaikan(page, kode, 0);
+    const lanjut = await tunggu(page, (lama) => document.getElementById('skor-saya').textContent === '1' && [...document.querySelectorAll('.slot')].map((s) => s.getAttribute('aria-label')).join('|') !== lama && !document.querySelector('.slot').disabled, 4000, papan0);
+    await tidur(300);
+    cek('S2-2: setelah benar, puzzle berikutnya langsung tampil tanpa jeda antarronde', lanjut && (await lapis(page)) === null && (await semuaToast(page)).includes('Puzzle 2 dari 3'), JSON.stringify(await semuaToast(page)));
+    b = await bilah(page);
+    cek('K-1: puzzle yang selesai memberi 1 poin untuk pemain itu sendiri', b.saya === '1' && b.lawan === '0' && b.nama === 'Budi · puzzle 1', JSON.stringify(b));
+    cek('balapan: timer tidak diulang di puzzle berikutnya', /^Duel · 8:[45]\d$/.test(await teksDi(page, 'judul-level')), await teksDi(page, 'judul-level'));
+    const majuBalapan = await catatan(page, 'maju');
+    cek('P-2: progres dilaporkan dengan nomor rondenya', majuBalapan.some((m) => m[2] === 10), JSON.stringify(majuBalapan.map((m) => m[2])));
+
+    // Lawan menyusul: poinnya naik sendiri, dan pemain ini tetap di puzzle 2.
+    await palsu(page, (k) => { window.__palsu.lawanJawab(k, 0); window.__palsu.ubah(k, (room) => { room.pemain['uid-lawan'].maju = 12; }); }, kode);
+    await tunggu(page, () => document.getElementById('skor-lawan').textContent === '1', 3000);
+    await tidur(300);
+    b = await bilah(page);
+    cek('P-3: nomor puzzle lawan dan progresnya terlihat', b.lawan === '1' && b.nama === 'Budi · puzzle 2' && b.isi === 2 && (await semuaToast(page)).includes('Budi menyelesaikan puzzle 1'), JSON.stringify(b));
+    cek('S2-1: lawan yang menyusul tidak memindahkan papan pemain ini', (await bilah(page)).saya === '1' && await page.evaluate(() => !document.querySelector('.slot').disabled));
+    await page.screenshot({ path: path.join(FOTO, 'online-balapan.png') });
+
+    // Lawan menyalip dan mencapai 3 poin lebih dulu.
+    await palsu(page, (k) => { window.__palsu.lawanJawab(k, 1); window.__palsu.lawanJawab(k, 2); }, kode);
+    await adaHasil(page);
+    let h = await hasilTampil(page);
+    cek('K-1: yang pertama mencapai poin target menang, walau sempat tertinggal', h.judul === 'Kamu kalah' && h.detail === 'Skor akhir 1–3.', JSON.stringify(h));
+    await page.close();
+
+    // Menang balapan.
+    page = await buka();
+    kode = await mulaiSebagaiTuan(page, { atur: { kesulitan: 'easy', sistem: 'balapan' } });
+    for (let r = 0; r < 3; r++) {
+      const lama = await idPapan(page);
+      await selesaikan(page, kode, r);
+      if (r < 2) await tunggu(page, (id) => [...document.querySelectorAll('.slot')].map((s) => s.getAttribute('aria-label')).join('|') !== id && !document.querySelector('.slot').disabled, 4000, lama);
     }
     await adaHasil(page);
-    const h = await hasilTampil(page);
-    cek(`O-3: ${kasus.nama}`, h.judul === kasus.judul && h.detail === kasus.detail, JSON.stringify(h));
-    if (kasus.judul === 'Seri') {
-      cek('seri: judulnya netral, bukan merah atau hijau', /netral/.test(h.kelas) && !/gagal/.test(h.kelas), h.kelas);
-      await page.screenshot({ path: path.join(FOTO, 'online-seri.png') });
-    }
+    h = await hasilTampil(page);
+    const kiriman = await catatan(page, 'jawab');
+    cek('balapan: menyelesaikan 3 puzzle lebih dulu berarti menang', h.judul === 'Kamu menang!' && h.detail === 'Skor akhir 3–0.' && kiriman.map((c) => c[2]).join() === '0,1,2', JSON.stringify(h));
+    await page.close();
+
+    // Batas waktu habis.
+    page = await buka();
+    kode = await mulaiSebagaiTuan(page, { atur: { kesulitan: 'easy', sistem: 'balapan' } });
+    const lama = await idPapan(page);
+    await selesaikan(page, kode, 0);
+    await tunggu(page, (id) => [...document.querySelectorAll('.slot')].map((s) => s.getAttribute('aria-label')).join('|') !== id && !document.querySelector('.slot').disabled, 4000, lama);
+    await keTenggat(page, kode);
+    await tunggu(page, () => /Waktu habis/.test(document.getElementById('pesan-solo').textContent), 3000);
+    cek('S2-3: batas waktu balapan habis, papan terkunci', (await teksDi(page, 'pesan-solo')) === 'Waktu habis. Menghitung hasil…' && (await catatan(page, 'jawab')).length === 1, (await teksDi(page, 'pesan-solo')) + ' | ' + (await teksDi(page, 'judul-level')) + ' | ' + JSON.stringify(await catatan(page, 'jawab')).length + ' | ' + JSON.stringify(await bilah(page)));
+    await majuWaktu(page, 2000);
+    await adaHasil(page);
+    h = await hasilTampil(page);
+    cek('S2-4: waktu habis, poin terbanyak menang', h.judul === 'Kamu menang!' && h.detail === 'Waktu habis. Skor akhir 1–0.', JSON.stringify(h));
+    await page.close();
+
+    page = await buka();
+    kode = await mulaiSebagaiTamu(page, { atur: { kesulitan: 'easy', sistem: 'balapan' } });
+    await majuWaktu(page, 9 * 60 * 1000 + 2500);
+    await adaHasil(page);
+    h = await hasilTampil(page);
+    cek('S2-4: waktu habis dengan poin sama berarti seri', h.judul === 'Seri' && h.detail === 'Waktu habis. Skor akhir 0–0.', JSON.stringify(h));
+    await page.close();
+  }
+
+  /* Jawaban yang ditolak server, dan jawaban lawan yang ternyata lebih dulu */
+  {
+    let page = await buka();
+    let kode = await mulaiSebagaiTuan(page);
+    await palsu(page, () => { window.__palsu.tolakJawab = 1; });
+    const puzzle = await selesaikan(page, kode, 0);
+    const pulih = await tunggu(page, () => document.querySelectorAll('.slot.terisi').length === 0 && !document.querySelector('.slot').disabled, 4000);
+    cek('jawaban yang ditolak server: papan dipasang ulang, dan pemain diberi tahu', pulih && (await semuaToast(page)).includes('Jawaban gagal terkirim') && (await bilah(page)).saya === '0' && (await lapis(page)) === null, JSON.stringify(await semuaToast(page)));
+    await isiSemua(page, puzzle);
+    await klik(page, 'tombol-kunci');
+    cek('jawaban yang ditolak server: ronde yang sama bisa dikunci lagi', await adaLapis(page, '^Kamu menang ronde 1$') && (await catatan(page, 'jawab')).length === 1);
+    await page.close();
+
+    // Jam server menempatkan jawaban lawan lebih dulu, walau pemain ini juga benar.
+    page = await buka();
+    kode = await mulaiSebagaiTuan(page);
+    await palsu(page, (k) => {
+      const asli = window.Online.kirimJawaban;
+      window.Online.kirimJawaban = (kd, r, kawat) => asli(kd, r, kawat).then(() => window.__palsu.ubah(k, (room) => {
+        room.ronde[r]['uid-lawan'] = { papan: kawat.slice(), pada: room.ronde[r]['uid-saya'].pada - 5 };
+      }));
+    }, kode);
+    await selesaikan(page, kode, 0);
+    const kalah = await adaLapis(page, '^Budi menang ronde 1$');
+    cek('dua jawaban benar di ronde yang sama: jam server yang menentukan', kalah && (await lapis(page)).skor === '0 – 1', JSON.stringify(await lapis(page)));
     await page.close();
   }
 
@@ -581,15 +858,18 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
     }), kode);
     await tidur(600);
     const kembali = { pesan: await teksDi(page, 'pesan-solo'), toast: await toast(page) };
-    cek('O-5: lawan yang kembali diberitahukan, dan duel lanjut', /Kunci jawaban benar lebih dulu dari Budi/.test(kembali.pesan) && !!kembali.toast && kembali.toast.teks === 'Budi tersambung lagi', JSON.stringify(kembali));
+    cek('O-5: lawan yang kembali diberitahukan, dan pertandingan lanjut', /Kunci jawaban benar lebih dulu dari Budi/.test(kembali.pesan) && !!kembali.toast && kembali.toast.teks === 'Budi tersambung lagi', JSON.stringify(kembali));
 
+    // Lawan putus di tengah jeda antarronde, dengan skor 1-0.
+    await selesaikan(page, kode, 0);
+    await adaLapis(page, '^Kamu menang ronde 1$');
     await palsu(page, (k) => window.__palsu.ubah(k, (room, t) => {
       room.pemain['uid-lawan'].tersambung = false;
       room.pemain['uid-lawan'].putusPada = t - 30500;
     }), kode);
     await adaHasil(page);
     const h = await hasilTampil(page);
-    cek('O-5: lawan putus lebih dari 30 detik, pemain ini mengklaim menang', (await catatan(page, 'klaim')).length === 1 && h.judul === 'Kamu menang!' && h.detail === 'Budi terputus lebih dari 30 detik.', JSON.stringify(h));
+    cek('O-5: lawan putus lebih dari 30 detik, pemain ini menang seluruh pertandingan', (await catatan(page, 'klaim')).length === 1 && h.judul === 'Kamu menang!' && h.detail === 'Budi terputus lebih dari 30 detik.', JSON.stringify(h));
     await page.close();
 
     // Pemain ini sendiri yang putus.
@@ -609,11 +889,30 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
     const kalah = await hasilTampil(sendiri);
     cek('O-5: yang putus terlalu lama melihat alasannya', kalah.judul === 'Kamu kalah' && kalah.detail === 'Koneksimu terputus lebih dari 30 detik.', JSON.stringify(kalah));
     await sendiri.close();
+
+    // Lawan terputus di ruang tunggu: tidak ada klaim, hanya menunggu.
+    const tunggu2 = await buka();
+    await palsu(tunggu2, () => { window.__palsu.kodeBerikut.push('PQRST'); });
+    await keLobi(tunggu2);
+    await klik(tunggu2, 'tombol-buat-room');
+    await tunggu(tunggu2, () => /Menunggu lawan/.test(document.getElementById('status-tunggu').textContent));
+    await palsu(tunggu2, () => {
+      const S = window.__palsu;
+      S.lawanGabung('PQRST', 'Budi');
+      S.lawanSiap('PQRST');
+      S.ubah('PQRST', (room, t) => { room.pemain['uid-lawan'].tersambung = false; room.pemain['uid-lawan'].putusPada = t - 60000; });
+    });
+    await tunggu(tunggu2, () => !document.getElementById('tombol-siap').hidden);
+    await klik(tunggu2, 'tombol-siap');
+    await tunggu(tunggu2, () => /tersambung lagi/.test(document.getElementById('status-tunggu').textContent));
+    await tidur(600);
+    cek('T-5: pertandingan tidak dimulai selagi lawan terputus di ruang tunggu', (await teksDi(tunggu2, 'status-tunggu')) === 'Menunggu Budi tersambung lagi…' && (await catatan(tunggu2, 'mulai')).length === 0 && (await catatan(tunggu2, 'klaim')).length === 0);
+    await tunggu2.close();
   }
 
   /* Keluar dan batal */
   {
-    // Pembuat room membatalkan sebelum ada lawan.
+    // Pembuat room keluar sebelum ada lawan.
     let page = await buka();
     await palsu(page, () => { window.__palsu.kodeBerikut.push('ABCDE'); });
     await keLobi(page);
@@ -621,7 +920,7 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
     await tunggu(page, () => /Menunggu lawan/.test(document.getElementById('status-tunggu').textContent));
     await klik(page, 'tombol-batal-room');
     await tidur(400);
-    cek('batal: room tanpa lawan dihapus, lalu kembali ke lobi', (await catatan(page, 'hapus')).length === 1 && await terlihat(page, 'online-lobi') && await page.evaluate(() => !window.__palsu.rooms.ABCDE));
+    cek('keluar: room tanpa lawan dihapus, lalu kembali ke lobi', (await catatan(page, 'hapus')).length === 1 && await terlihat(page, 'online-lobi') && await page.evaluate(() => !window.__palsu.rooms.ABCDE));
 
     // Kode kedaluwarsa saat menunggu.
     await palsu(page, () => { window.__palsu.kodeBerikut.push('BCDEF'); });
@@ -629,31 +928,31 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
     await tunggu(page, () => /Menunggu lawan/.test(document.getElementById('status-tunggu').textContent));
     await palsu(page, () => { window.__palsu.selisih += DuelOnline.MASA_TUNGGU_MS + 1000; });
     await tunggu(page, () => !document.getElementById('online-lobi').hidden, 3000);
-    cek('O-9: room tanpa lawan kedaluwarsa setelah 10 menit', /kedaluwarsa/.test(await galatTampil(page) || '') && await page.evaluate(() => !window.__palsu.rooms.BCDEF), String(await galatTampil(page)));
+    cek('T-7: room tanpa lawan kedaluwarsa setelah 10 menit', /kedaluwarsa/.test(await galatTampil(page) || '') && await page.evaluate(() => !window.__palsu.rooms.BCDEF), String(await galatTampil(page)));
     await page.close();
 
-    // Lawan keluar sebelum duel dimulai.
+    // Lawan keluar dari ruang tunggu.
     page = await buka();
-    await palsu(page, () => window.__palsu.roomLawan('FGHJK', 'easy', 'Budi'));
+    await palsu(page, () => window.__palsu.roomLawan('FGHJK', {}, 'Budi'));
     await keLobi(page);
     await isiKode(page, 'FGHJK');
     await klik(page, 'tombol-gabung');
-    await tunggu(page, () => /memulai duel/.test(document.getElementById('status-tunggu').textContent));
+    await tunggu(page, () => !document.getElementById('tombol-siap').hidden);
     await palsu(page, () => window.__palsu.ubah('FGHJK', (room, t) => { room.pemain['uid-lawan'].menyerah = t; }));
     await tunggu(page, () => !document.getElementById('online-lobi').hidden, 3000);
-    cek('batal: lawan keluar sebelum mulai, pemain kembali ke lobi dengan penjelasan', /Budi keluar sebelum duel dimulai/.test(await galatTampil(page) || ''), String(await galatTampil(page)));
+    cek('T-6: lawan keluar dari ruang tunggu, pemain kembali ke lobi dengan penjelasan', /Budi keluar sebelum duel dimulai/.test(await galatTampil(page) || ''), String(await galatTampil(page)));
 
-    // Tamu membatalkan sebelum duel dimulai.
-    await palsu(page, () => window.__palsu.roomLawan('GHJKL', 'easy', 'Budi'));
+    // Tamu keluar dari ruang tunggu.
+    await palsu(page, () => window.__palsu.roomLawan('GHJKL', {}, 'Budi'));
     await isiKode(page, 'GHJKL');
     await klik(page, 'tombol-gabung');
-    await tunggu(page, () => /memulai duel/.test(document.getElementById('status-tunggu').textContent));
+    await tunggu(page, () => !document.getElementById('tombol-siap').hidden);
     await klik(page, 'tombol-batal-room');
     await tidur(400);
-    cek('batal: tamu yang keluar sebelum mulai memberi tahu pembuat room', (await catatan(page, 'menyerah')).some((c) => c[1] === 'GHJKL') && await terlihat(page, 'online-lobi'));
+    cek('T-6: tamu yang keluar dari ruang tunggu memberi tahu pembuat room', (await catatan(page, 'menyerah')).some((c) => c[1] === 'GHJKL') && await terlihat(page, 'online-lobi'));
     await page.close();
 
-    // Keluar di tengah duel.
+    // Keluar di tengah ronde.
     page = await buka();
     const kode = await mulaiSebagaiTuan(page);
     await klik(page, 'tombol-solo-keluar');
@@ -663,104 +962,130 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
       judul: document.getElementById('judul-keluar').textContent,
       teks: document.getElementById('teks-keluar').textContent,
     }));
-    cek('keluar di tengah duel: diminta yakin dulu', dialog.buka && dialog.judul === 'Keluar dari duel?' && /dihitung kalah/.test(dialog.teks), JSON.stringify(dialog));
+    cek('keluar di tengah pertandingan: diminta yakin dulu', dialog.buka && dialog.judul === 'Keluar dari duel?' && /dihitung kalah di seluruh pertandingan/.test(dialog.teks), JSON.stringify(dialog));
     await klik(page, 'tombol-lanjut-main');
     await tidur(500);
-    cek('keluar di tengah duel: Lanjut main tidak mengubah apa pun', (await catatan(page, 'menyerah')).length === 0 && await page.evaluate(() => !document.getElementById('layar-solo').hidden));
+    cek('keluar di tengah pertandingan: Lanjut main tidak mengubah apa pun', (await catatan(page, 'menyerah')).length === 0 && await page.evaluate(() => !document.getElementById('layar-solo').hidden));
+
+    // Keluar saat jeda antarronde juga dihitung kalah, jadi tetap diminta yakin.
+    await selesaikan(page, kode, 0);
+    await adaLapis(page, '^Kamu menang ronde 1$');
     await klik(page, 'tombol-solo-keluar');
-    await tidur(400);
+    await tidur(500);
+    cek('keluar saat jeda antarronde: tetap diminta yakin', await page.evaluate(() => !document.getElementById('dialog-keluar').hidden && !document.getElementById('dialog-keluar').classList.contains('pergi')) && (await catatan(page, 'menyerah')).length === 0);
     await klik(page, 'tombol-yakin-keluar');
     await tidur(700);
-    cek('keluar di tengah duel: dicatat menyerah, lalu kembali ke lobi', (await catatan(page, 'menyerah')).some((c) => c[1] === kode) && await terlihat(page, 'online-lobi') && await page.evaluate(() => document.getElementById('dialog-keluar').hidden || document.getElementById('dialog-keluar').classList.contains('pergi')));
+    cek('keluar di tengah pertandingan: dicatat menyerah, lalu kembali ke lobi', (await catatan(page, 'menyerah')).some((c) => c[1] === kode) && await terlihat(page, 'online-lobi') && await page.evaluate(() => document.getElementById('dialog-keluar').hidden || document.getElementById('dialog-keluar').classList.contains('pergi')));
     await page.close();
 
-    // Lawan keluar di tengah duel.
+    // Lawan keluar di tengah pertandingan.
     page = await buka();
-    const kode3 = await mulaiSebagaiTuan(page);
+    const kode3 = await mulaiSebagaiTuan(page, { atur: { target: 5, sistem: 'balapan', kesulitan: 'hard' } });
     await palsu(page, (k) => window.__palsu.ubah(k, (room, t) => { room.pemain['uid-lawan'].menyerah = t; }), kode3);
     await adaHasil(page);
     const h = await hasilTampil(page);
-    cek('lawan keluar di tengah duel: pemain ini menang', h.judul === 'Kamu menang!' && h.detail === 'Budi keluar dari duel.', JSON.stringify(h));
+    cek('lawan keluar di tengah pertandingan: pemain ini menang', h.judul === 'Kamu menang!' && h.detail === 'Budi keluar dari duel.', JSON.stringify(h));
 
-    // Main lagi atas ajakan sendiri.
+    // Main lagi atas ajakan sendiri: room baru dengan pengaturan yang sama, lewat ruang tunggu lagi.
     await palsu(page, () => { window.__palsu.kodeBerikut.push('RSTUV'); });
     await klik(page, 'tombol-level-lanjut');
     await tunggu(page, () => !document.getElementById('online-tunggu').hidden && /Menunggu lawan/.test(document.getElementById('status-tunggu').textContent));
     const lagi = await page.evaluate((k) => ({
       kode: document.getElementById('kode-room').textContent,
       ajakan: window.__palsu.rooms[k].lanjut,
-      kesulitan: window.__palsu.rooms.RSTUV.kesulitan,
-      toast: (document.querySelector('.toast:not(.keluar) .toast-teks') || {}).textContent || null,
+      atur: window.__palsu.rooms.RSTUV.atur,
+      toast: [...document.querySelectorAll('.toast .toast-teks')].map((e) => e.textContent),
     }), kode3);
-    cek('main lagi: membuat room baru dengan tingkat yang sama dan mengabari lawan', lagi.kode === 'RSTUV' && lagi.ajakan === 'RSTUV' && lagi.kesulitan === 'medium', JSON.stringify(lagi));
-    cek('main lagi: ajakan sendiri tidak disangka ajakan lawan', lagi.toast !== 'Budi mengajak main lagi', String(lagi.toast));
+    cek('main lagi: room baru dengan pengaturan yang sama, dan lawan dikabari', lagi.kode === 'RSTUV' && lagi.ajakan === 'RSTUV' && JSON.stringify(lagi.atur) === JSON.stringify({ kesulitan: 'hard', target: 5, sistem: 'balapan', rev: 0 }), JSON.stringify(lagi));
+    cek('main lagi: ajakan sendiri tidak disangka ajakan lawan', !lagi.toast.includes('Budi mengajak main lagi'), JSON.stringify(lagi.toast));
+    cek('main lagi: kembali ke ruang tunggu, jadi keduanya harus menekan Siap lagi', (await ruang(page)).atur && (await catatan(page, 'mulai')).length === 1);
     await page.close();
 
-    // Keduanya menekan Main lagi bersamaan: yang kalah cepat ikut room lawan.
+    // Lawan lebih dulu mengajak: tombolnya berubah, lalu pemain ini ikut room lawan.
     page = await buka();
     const kode4 = await mulaiSebagaiTuan(page);
     await palsu(page, (k) => window.__palsu.ubah(k, (room, t) => { room.pemain['uid-lawan'].menyerah = t; }), kode4);
     await adaHasil(page);
     await palsu(page, (k) => {
-      const S = window.__palsu;
-      S.kodeBerikut.push('WXYZ2');
-      S.roomLawan('TUVWX', 'medium', 'Budi');
-      // Ajakan lawan tiba di server lebih dulu, tetapi belum sampai ke layar pemain ini.
-      S.rooms[k].lanjut = 'TUVWX';
+      window.__palsu.roomLawan('WXYZ2', { target: 7 }, 'Budi');
+      window.__palsu.ubah(k, (room) => { room.lanjut = 'WXYZ2'; });
     }, kode4);
+    await tunggu(page, () => document.getElementById('tombol-level-lanjut').textContent === 'Gabung pertandingan baru', 3000);
+    cek('main lagi: ajakan lawan mengubah tombol dan diberitahukan', (await teksDi(page, 'tombol-level-lanjut')) === 'Gabung pertandingan baru' && (await semuaToast(page)).includes('Budi mengajak main lagi'));
     await klik(page, 'tombol-level-lanjut');
-    await tunggu(page, () => !document.getElementById('online-tunggu').hidden && /memulai duel/.test(document.getElementById('status-tunggu').textContent));
-    const balapan = await page.evaluate(() => ({
-      judul: document.getElementById('judul-tunggu').textContent,
-      tamu: window.__palsu.rooms.TUVWX.tamu,
-      sisa: !!window.__palsu.rooms.WXYZ2,
-    }));
-    cek('main lagi bersamaan: ikut room lawan, dan room sendiri dibuang', balapan.judul === 'Room TUVWX' && balapan.tamu === SAYA && !balapan.sisa, JSON.stringify(balapan));
+    await tunggu(page, () => !document.getElementById('online-tunggu').hidden && !document.getElementById('tombol-siap').hidden);
+    const ikut = await ruang(page);
+    cek('main lagi: ikut room lawan, dan masuk ruang tunggunya', ikut.judul === 'Room WXYZ2' && ikut.terkunci && (await aturTampil(page)).target === '7' && (await catatan(page, 'buat')).length === 1, JSON.stringify(ikut));
     await page.close();
   }
 
-  /* Tab tertidur selama duel: hasil tetap tampil tanpa papan */
+  /* Memuat ulang halaman di tengah pertandingan, lalu masuk lagi lewat kode */
   {
-    const page = await buka();
-    await palsu(page, () => window.__palsu.roomLawan('FGHJK', 'easy', 'Budi'));
-    await keLobi(page);
-    await isiKode(page, 'FGHJK');
-    await klik(page, 'tombol-gabung');
-    await tunggu(page, () => /memulai duel/.test(document.getElementById('status-tunggu').textContent));
-    await palsu(page, () => window.__palsu.ubah('FGHJK', (room, t) => {
-      const puzzleRoom = DuelOnline.ambilPuzzle(DataLevel, room);
-      room.mulaiPada = t - 60000;
-      room.jawaban = { 'uid-lawan': { papan: DuelOnline.solusi(puzzleRoom).slice(), pada: t - 1000 } };
-    }));
-    await adaHasil(page);
-    const h = await hasilTampil(page);
-    cek('hasil tetap tampil walau papan belum sempat dibuka', h.judul === 'Kamu kalah' && h.detail === 'Budi mengunci jawaban benar lebih dulu.', JSON.stringify(h));
-    await klik(page, 'tombol-level-peta');
-    await tidur(600);
-    cek('keluar dari hasil tanpa papan kembali ke lobi', await terlihat(page, 'online-lobi'));
-    await page.close();
-  }
-
-  /* Memuat ulang halaman di tengah duel, lalu masuk lagi lewat kode */
-  {
-    const page = await buka();
+    let page = await buka();
     await palsu(page, () => {
       const S = window.__palsu;
-      S.roomLawan('FGHJK', 'medium', 'Budi');
+      S.roomLawan('FGHJK', {}, 'Budi');
       S.ubah('FGHJK', (room, t) => {
         room.tamu = S.uid;
-        room.pemain[S.uid] = { nama: 'Bima', tersambung: false, putusPada: t - 5000 };
+        room.pemain[S.uid] = { nama: 'Bima', tersambung: false, putusPada: t - 5000, siap: 0, maju: 3 };
+        room.pemain['uid-lawan'].siap = 0;
         room.mulaiPada = t - 60000;
+        room.puzzle = DuelOnline.pilihDaftarPuzzle(DataLevel, room.atur);
+        // Lawan menang ronde 1 pada detik ke-24, jadi ronde 2 berjalan sejak detik ke-29.
+        room.ronde = { 0: { 'uid-lawan': { papan: DuelOnline.solusi(DuelOnline.ambilDaftarPuzzle(DataLevel, room)[0]).slice(), pada: room.mulaiPada + 4000 + 20000 } } };
       });
     });
     await keLobi(page);
     await isiKode(page, 'FGHJK');
     await klik(page, 'tombol-gabung');
-    const lanjut = await tunggu(page, () => !document.getElementById('layar-solo').hidden && document.querySelectorAll('.slot').length === 9);
+    const lanjut = await papanTampil(page);
     await tidur(600);
     const judul = await teksDi(page, 'judul-level');
-    cek('masuk lagi ke duel yang sedang berjalan: papan tampil dengan sisa waktu', lanjut && /^Duel · (4:0\d|3:5\d)$/.test(judul), judul);
+    const b = await bilah(page);
+    cek('masuk lagi: papan ronde yang sedang berjalan tampil dengan sisa waktunya', lanjut && /^Duel · 4:[23]\d$/.test(judul) && b.info === 'Ronde 2/5', `${judul}, ${JSON.stringify(b)}`);
+    cek('masuk lagi: skor tidak hilang, dan papannya mulai kosong', b.saya === '0' && b.lawan === '1' && await page.evaluate(() => document.querySelectorAll('.slot.terisi').length === 0), JSON.stringify(b));
     cek('masuk lagi: kehadiran dipasang lagi', (await catatan(page, 'hadir')).some((c) => c[1] === 'FGHJK'));
+    await page.close();
+
+    // Masuk lagi ke pertandingan yang sudah selesai: hasilnya tetap tampil, tanpa papan.
+    page = await buka();
+    await palsu(page, () => {
+      const S = window.__palsu;
+      S.roomLawan('GHJKL', { kesulitan: 'easy', sistem: 'balapan' }, 'Budi');
+      S.ubah('GHJKL', (room, t) => {
+        room.tamu = S.uid;
+        room.pemain[S.uid] = { nama: 'Bima', tersambung: true, siap: 0 };
+        room.mulaiPada = t - 120000;
+        room.puzzle = DuelOnline.pilihDaftarPuzzle(DataLevel, room.atur);
+        const daftar = DuelOnline.ambilDaftarPuzzle(DataLevel, room);
+        room.ronde = {};
+        [20000, 40000, 60000].forEach((ms, r) => { room.ronde[r] = { 'uid-lawan': { papan: DuelOnline.solusi(daftar[r]).slice(), pada: room.mulaiPada + 4000 + ms } }; });
+      });
+    });
+    await keLobi(page);
+    await isiKode(page, 'GHJKL');
+    await klik(page, 'tombol-gabung');
+    await adaHasil(page);
+    const h = await hasilTampil(page);
+    cek('hasil tetap tampil walau papan belum sempat dibuka', h.judul === 'Kamu kalah' && h.detail === 'Skor akhir 0–3.', JSON.stringify(h));
+    await klik(page, 'tombol-level-peta');
+    cek('keluar dari hasil tanpa papan kembali ke lobi', await tunggu(page, () => document.getElementById('layar-hasil').hidden && !document.getElementById('online-lobi').hidden, 3000) && await terlihat(page, 'online-lobi'));
+    await page.close();
+
+    // Daftar puzzle yang tidak cocok dengan game ini.
+    page = await buka();
+    await palsu(page, () => window.__palsu.roomLawan('HJKLM', {}, 'Budi'));
+    await keLobi(page);
+    await isiKode(page, 'HJKLM');
+    await klik(page, 'tombol-gabung');
+    await tunggu(page, () => !document.getElementById('tombol-siap').hidden);
+    await palsu(page, () => window.__palsu.ubah('HJKLM', (room, t) => {
+      room.mulaiPada = t - 10000;
+      room.puzzle = DuelOnline.pilihDaftarPuzzle(DataLevel, room.atur).map((p, i) => (i === 3 ? { ...p, sidik: p.sidik + 1 } : p));
+    }));
+    await adaHasil(page);
+    const rusak = await hasilTampil(page);
+    cek('daftar puzzle yang tidak cocok: duel dibatalkan dengan penjelasan, tanpa Main lagi', rusak.judul === 'Duel dibatalkan' && /Versi game kalian berbeda/.test(rusak.detail) && rusak.lanjut === null, JSON.stringify(rusak));
     await page.close();
   }
 
@@ -779,34 +1104,67 @@ module.exports = async function ujiOnline(browser, galat, { cek, tidur, bukaHala
       if (layar.scrollWidth > layar.clientWidth + 1) hasil.push(`gulir samping ${layar.scrollWidth - layar.clientWidth}px`);
       return hasil;
     }, selektor, u.width);
+    const muatTinggi = () => page.evaluate((t) => {
+      const layar = document.getElementById('layar-online');
+      const bawah = Math.max(...[...document.querySelectorAll('#online-tunggu > :not([hidden])')].map((e) => e.getBoundingClientRect().bottom));
+      return bawah <= t + 0.5 && layar.scrollHeight <= layar.clientHeight + 1 ? '' : `bawah ${Math.round(bawah)} dari ${t}, gulir ${layar.scrollHeight - layar.clientHeight}px`;
+    }, u.height);
     await keLobi(page, 'Abcdefghijklmnop');
     await page.screenshot({ path: path.join(FOTO, `online-lobi-${u.nama}.png`) });
     const lobi = await luar('#online-lobi *');
     cek(`${u.nama}: lobi duel online muat`, lobi.length === 0, lobi.slice(0, 3).join(' | '));
+
     await palsu(page, () => { window.__palsu.kodeBerikut.push('WWWWW'); });
     await klik(page, 'tombol-buat-room');
     await tunggu(page, () => /Menunggu lawan/.test(document.getElementById('status-tunggu').textContent));
+    // Pengaturan dengan teks terpanjang: Balapan, 10 poin.
+    await pilihAtur(page, 'target', 10);
+    await pilihAtur(page, 'sistem', 'balapan');
+    await tunggu(page, () => /Balapan/.test(document.getElementById('info-atur').textContent), 2000);
     await tidur(300);
     await page.screenshot({ path: path.join(FOTO, `online-tunggu-${u.nama}.png`) });
-    const ruang = await luar('#online-tunggu *');
-    const tinggi = await page.evaluate((t) => [...document.querySelectorAll('#online-tunggu > :not([hidden])')].every((e) => e.getBoundingClientRect().bottom <= t + 0.5), u.height);
-    cek(`${u.nama}: ruang tunggu muat tanpa digulir`, ruang.length === 0 && tinggi, ruang.slice(0, 3).join(' | ') + (tinggi ? '' : ' terlalu tinggi'));
-    await palsu(page, () => {
-      window.__palsu.majuHitung = 3700;
-      window.__palsu.ubah('WWWWW', (room) => {
-        room.tamu = 'uid-lawan';
-        room.pemain['uid-lawan'] = { nama: 'Wwwwwwwwwwwwwwww', tersambung: true };
-      });
-    });
-    await tunggu(page, () => !document.getElementById('layar-solo').hidden && document.querySelectorAll('.slot').length === 9);
+    let samping = await luar('#online-tunggu *');
+    let tinggi = await muatTinggi();
+    cek(`${u.nama}: ruang tunggu sebelum ada lawan muat tanpa digulir`, samping.length === 0 && tinggi === '', samping.slice(0, 3).join(' | ') + tinggi);
+
+    await palsu(page, () => { window.__palsu.lawanGabung('WWWWW', 'Wwwwwwwwwwwwwwww'); window.__palsu.lawanSiap('WWWWW'); });
+    await tunggu(page, () => !document.getElementById('tombol-siap').hidden);
+    await tidur(300);
+    await page.screenshot({ path: path.join(FOTO, `online-siap-${u.nama}.png`) });
+    samping = await luar('#online-tunggu *');
+    tinggi = await muatTinggi();
+    const segmen = await page.evaluate(() => [...document.querySelectorAll('#atur-tunggu .segmen button')].filter((b) => b.scrollWidth > b.clientWidth + 1).map((b) => b.textContent));
+    cek(`${u.nama}: ruang tunggu dengan lawan bernama 16 karakter muat tanpa digulir`, samping.length === 0 && tinggi === '' && segmen.length === 0, samping.slice(0, 3).join(' | ') + tinggi + segmen.join());
+
+    await pilihAtur(page, 'sistem', 'rebutan');
+    await pilihAtur(page, 'target', 3);
+    await tidur(200);
+    await palsu(page, () => window.__palsu.lawanSiap('WWWWW'));
+    await klik(page, 'tombol-siap');
+    await papanTampil(page);
     await tidur(900);
-    const papanLuar = await page.evaluate((w, t) => [...document.querySelectorAll('.slot, .sedia, #tombol-kunci, .bar-solo .ikon, #judul-level, #pesan-solo')].filter((e) => {
-      if (e.hidden) return false;
+    const papanLuar = () => page.evaluate((w, t) => [...document.querySelectorAll('.slot, .sedia, #tombol-kunci, .bar-solo .ikon, #judul-level, #pesan-solo, #bilah-duel, #bilah-duel *, .kotak-ronde')].filter((e) => {
+      if (e.hidden || e.closest('[hidden]')) return false;
       const q = e.getBoundingClientRect();
       return q.left < -0.5 || q.top < -0.5 || q.right > w + 0.5 || q.bottom > t + 0.5;
     }).map((e) => e.id || e.className), u.width, u.height);
+    const tumpang = await page.evaluate(() => {
+      const kotak = (el) => el.getBoundingClientRect();
+      const b = kotak(document.getElementById('bilah-duel'));
+      const p = kotak(document.getElementById('papan'));
+      const lawan = document.getElementById('nama-lawan-duel');
+      return { menimpaPapan: b.bottom > p.top + 0.5 && b.top < p.bottom && b.right > p.left && b.left < p.right, namaTerlihat: lawan.getBoundingClientRect().width > 20 };
+    });
     await page.screenshot({ path: path.join(FOTO, `online-papan-${u.nama}.png`) });
-    cek(`${u.nama}: papan duel muat dengan nama lawan 16 karakter`, papanLuar.length === 0, papanLuar.slice(0, 4).join());
+    const luarPapan = await papanLuar();
+    cek(`${u.nama}: papan duel dan bilah skor muat dengan nama lawan 16 karakter`, luarPapan.length === 0 && !tumpang.menimpaPapan && tumpang.namaTerlihat, luarPapan.slice(0, 4).join() + JSON.stringify(tumpang));
+
+    await palsu(page, () => window.__palsu.lawanJawab('WWWWW', 0));
+    await adaLapis(page, 'menang ronde 1$');
+    await tidur(300);
+    await page.screenshot({ path: path.join(FOTO, `online-jeda-${u.nama}.png`) });
+    const luarJeda = await papanLuar();
+    cek(`${u.nama}: lapisan antarronde muat`, luarJeda.length === 0 && (await lapis(page)) !== null, luarJeda.slice(0, 4).join());
     await page.close();
   }
 

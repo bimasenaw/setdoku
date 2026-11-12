@@ -5,10 +5,10 @@
     "rooms": {
       "$kode": {
         ".read": "auth != null && (!data.child('tamu').exists() || data.child('tuan').val() === auth.uid || data.child('tamu').val() === auth.uid)",
-        ".write": "auth != null && ((newData.exists() && (!data.exists() || data.child('dibuat').val() < now - 7200000) && newData.child('tuan').val() === auth.uid && !newData.child('tamu').exists() && !newData.child('mulaiPada').exists() && !newData.child('jawaban').exists() && !newData.child('akhir').exists() && !newData.child('lanjut').exists()) || (data.exists() && !newData.exists() && (data.child('tuan').val() === auth.uid || data.child('tamu').val() === auth.uid) && (!data.child('tamu').exists() || data.child('dibuat').val() < now - 1800000)))",
-        ".validate": "$kode.matches(/^[A-HJ-NP-Z2-9]{5}$/) && newData.hasChildren(['v', 'dibuat', 'tuan', 'kesulitan', 'level', 'jenis', 'sidik', 'pemain']) && newData.child('pemain').child(newData.child('tuan').val()).exists() && (!newData.child('tamu').exists() || newData.child('pemain').child(newData.child('tamu').val()).exists()) && (!newData.child('mulaiPada').exists() || newData.child('tamu').exists())",
+        ".write": "auth != null && ((newData.exists() && (!data.exists() || data.child('dibuat').val() < now - 14400000) && newData.child('tuan').val() === auth.uid && !newData.child('tamu').exists() && !newData.child('mulaiPada').exists() && !newData.child('puzzle').exists() && !newData.child('ronde').exists() && !newData.child('akhir').exists() && !newData.child('lanjut').exists()) || (data.exists() && !newData.exists() && (data.child('tuan').val() === auth.uid || data.child('tamu').val() === auth.uid) && (!data.child('tamu').exists() || data.child('dibuat').val() < now - 10800000)))",
+        ".validate": "$kode.matches(/^[A-HJ-NP-Z2-9]{5}$/) && newData.hasChildren(['v', 'dibuat', 'tuan', 'sidik', 'atur', 'pemain']) && newData.child('pemain').child(newData.child('tuan').val()).exists() && (!newData.child('tamu').exists() || newData.child('pemain').child(newData.child('tamu').val()).exists()) && newData.child('mulaiPada').exists() === newData.child('puzzle').exists() && (!newData.child('mulaiPada').exists() || newData.child('tamu').exists())",
         "v": {
-          ".validate": "newData.val() === 1"
+          ".validate": "newData.val() === 2"
         },
         "dibuat": {
           ".validate": "(newData.val() === now) || (data.exists() && newData.val() === data.val())"
@@ -16,25 +16,53 @@
         "tuan": {
           ".validate": "(newData.val() === auth.uid) || (data.exists() && newData.val() === data.val())"
         },
-        "kesulitan": {
-          ".validate": "newData.isString() && newData.val().matches(/^(easy|medium|hard)$/)"
-        },
-        "level": {
-          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 100 && newData.val() % 1 === 0"
-        },
-        "jenis": {
-          ".validate": "newData.isString() && newData.val().matches(/^(practice|ranked)$/)"
-        },
         "sidik": {
           ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 4294967295 && newData.val() % 1 === 0"
+        },
+        "atur": {
+          ".write": "auth != null && newData.exists() && data.parent().child('tuan').val() === auth.uid && !data.parent().child('mulaiPada').exists()",
+          ".validate": "newData.hasChildren(['kesulitan', 'target', 'sistem', 'rev']) && (!data.exists() || newData.child('rev').val() > data.child('rev').val() || newData.parent().child('dibuat').val() !== data.parent().child('dibuat').val())",
+          "kesulitan": {
+            ".validate": "newData.isString() && newData.val().matches(/^(easy|medium|hard)$/)"
+          },
+          "target": {
+            ".validate": "newData.val() === 3 || newData.val() === 5 || newData.val() === 7 || newData.val() === 10"
+          },
+          "sistem": {
+            ".validate": "newData.isString() && newData.val().matches(/^(rebutan|balapan)$/)"
+          },
+          "rev": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000 && newData.val() % 1 === 0"
+          },
+          "$lain": {
+            ".validate": false
+          }
         },
         "tamu": {
           ".write": "auth != null && !data.exists() && newData.exists() && data.parent().child('tuan').exists() && data.parent().child('tuan').val() !== auth.uid && now < data.parent().child('dibuat').val() + 600000",
           ".validate": "(newData.val() === auth.uid || (data.exists() && newData.val() === data.val())) && newData.val() !== newData.parent().child('tuan').val()"
         },
         "mulaiPada": {
-          ".write": "auth != null && !data.exists() && newData.exists() && data.parent().child('tuan').val() === auth.uid && data.parent().child('tamu').exists()",
+          ".write": "auth != null && !data.exists() && newData.exists() && data.parent().child('tuan').val() === auth.uid && data.parent().child('tamu').exists() && newData.parent().child('pemain').child(data.parent().child('tuan').val()).child('siap').val() === newData.parent().child('atur').child('rev').val() && newData.parent().child('pemain').child(data.parent().child('tamu').val()).child('siap').val() === newData.parent().child('atur').child('rev').val()",
           ".validate": "(newData.val() === now) || (data.exists() && newData.val() === data.val())"
+        },
+        "puzzle": {
+          ".write": "auth != null && !data.exists() && newData.exists() && data.parent().child('tuan').val() === auth.uid && !data.parent().child('mulaiPada').exists()",
+          "$r": {
+            ".validate": "$r.matches(/^([0-9]|1[0-8])$/) && newData.hasChildren(['level', 'jenis', 'sidik'])",
+            "level": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 100 && newData.val() % 1 === 0"
+            },
+            "jenis": {
+              ".validate": "newData.isString() && newData.val().matches(/^(practice|ranked)$/)"
+            },
+            "sidik": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 4294967295 && newData.val() % 1 === 0"
+            },
+            "$lain": {
+              ".validate": false
+            }
+          }
         },
         "pemain": {
           "$uid": {
@@ -52,26 +80,34 @@
             "menyerah": {
               ".validate": "(!data.exists() && newData.val() === now) || (data.exists() && newData.val() === data.val())"
             },
+            "siap": {
+              ".validate": "newData.isNumber() && newData.val() >= -1 && newData.val() <= 1000000 && newData.val() % 1 === 0"
+            },
+            "maju": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 189 && newData.val() % 1 === 0"
+            },
             "$lain": {
               ".validate": false
             }
           }
         },
-        "jawaban": {
-          "$uid": {
-            ".write": "auth != null && auth.uid === $uid && !data.exists() && newData.exists()",
-            ".validate": "newData.hasChildren(['papan', 'pada']) && data.parent().parent().child('mulaiPada').exists() && (data.parent().parent().child('tuan').val() === $uid || data.parent().parent().child('tamu').val() === $uid)",
-            "papan": {
-              ".validate": "newData.hasChildren(['0', '1', '2', '3', '4', '5', '6', '7', '8'])",
-              "$slot": {
-                ".validate": "$slot.matches(/^[0-8]$/) && newData.isNumber() && newData.val() >= -1 && newData.val() <= 80 && newData.val() % 1 === 0"
+        "ronde": {
+          "$r": {
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid && !data.exists() && newData.exists()",
+              ".validate": "newData.hasChildren(['papan', 'pada']) && data.parent().parent().parent().child('mulaiPada').exists() && data.parent().parent().parent().child('puzzle').child($r).exists() && (data.parent().parent().parent().child('tuan').val() === $uid || data.parent().parent().parent().child('tamu').val() === $uid)",
+              "papan": {
+                ".validate": "newData.hasChildren(['0', '1', '2', '3', '4', '5', '6', '7', '8'])",
+                "$slot": {
+                  ".validate": "$slot.matches(/^[0-8]$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 80 && newData.val() % 1 === 0"
+                }
+              },
+              "pada": {
+                ".validate": "(newData.val() === now) || (data.exists() && newData.val() === data.val())"
+              },
+              "$lain": {
+                ".validate": false
               }
-            },
-            "pada": {
-              ".validate": "(newData.val() === now) || (data.exists() && newData.val() === data.val())"
-            },
-            "$lain": {
-              ".validate": false
             }
           }
         },

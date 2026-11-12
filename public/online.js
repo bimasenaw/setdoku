@@ -119,21 +119,19 @@
     }));
   }
 
-  async function buatRoom({ nama, kesulitan }) {
+  // atur: { kesulitan, target, sistem }. Pembuat room masih bisa mengubahnya di ruang tunggu.
+  async function buatRoom({ nama, atur }) {
     await masuk();
     await tungguSambung();
+    if (!D.aturSah(atur)) throw galat('gagal');
     for (let coba = 0; coba < 5; coba++) {
       const kode = D.buatKode();
-      const puzzle = D.pilihPuzzle(root.DataLevel, kesulitan);
-      if (!puzzle) throw galat('gagal');
       const tulis = f.set(refRoom(kode), {
         v: D.VERSI,
         dibuat: f.serverTimestamp(),
         tuan: uid,
-        kesulitan,
-        level: puzzle.level,
-        jenis: puzzle.jenis,
-        sidik: puzzle.sidik,
+        sidik: D.sidikKumpulan(root.DataLevel),
+        atur: { kesulitan: atur.kesulitan, target: atur.target, sistem: atur.sistem, rev: 0 },
         pemain: { [uid]: { nama, tersambung: true } },
       });
       try {
@@ -164,7 +162,7 @@
     // Dua tab di browser yang sama memakai ID yang sama, jadi tidak bisa saling melawan.
     if (room.tuan === uid) throw galat('sendiri');
     if (room.tamu) throw galat('penuh');
-    if (room.v !== D.VERSI || !D.ambilPuzzle(root.DataLevel, room)) throw galat('versi');
+    if (room.v !== D.VERSI || room.sidik !== D.sidikKumpulan(root.DataLevel)) throw galat('versi');
     if (D.kedaluwarsa(room, waktuServer())) throw galat('kedaluwarsa');
     const tulis = f.update(refRoom(kode), {
       tamu: uid,
@@ -206,8 +204,14 @@
     lepasHadir = null;
   }
 
-  const mulai = (kode) => f.set(refRoom(kode, 'mulaiPada'), f.serverTimestamp());
-  const kirimJawaban = (kode, kawat) => f.set(refRoom(kode, 'jawaban', uid), { papan: kawat, pada: f.serverTimestamp() });
+  // Pengaturan hanya bisa ditulis pembuat room, dan nomor versinya (rev) harus naik.
+  const ubahAtur = (kode, atur) => f.set(refRoom(kode, 'atur'), atur);
+  // nilai: nomor versi pengaturan yang disetujui, atau -1 untuk membatalkan siap.
+  const aturSiap = (kode, nilai) => f.set(refRoom(kode, 'pemain', uid, 'siap'), nilai);
+  // Waktu mulai dan daftar puzzle ditulis bersamaan, jadi tidak pernah ada yang satu tanpa yang lain.
+  const mulai = (kode, daftar) => f.update(refRoom(kode), { mulaiPada: f.serverTimestamp(), puzzle: daftar });
+  const kirimJawaban = (kode, ronde, kawat) => f.set(refRoom(kode, 'ronde', ronde, uid), { papan: kawat, pada: f.serverTimestamp() });
+  const kirimMaju = (kode, nilai) => f.set(refRoom(kode, 'pemain', uid, 'maju'), nilai);
   const menyerah = (kode) => f.set(refRoom(kode, 'pemain', uid, 'menyerah'), f.serverTimestamp());
   const klaimPutus = (kode) => f.set(refRoom(kode, 'akhir'), { pemenang: uid, alasan: 'putus', pada: f.serverTimestamp() });
   const hapusRoom = (kode) => f.remove(refRoom(kode));
@@ -221,7 +225,7 @@
 
   root.Online = {
     masuk, buatRoom, gabungRoom, pantau, hadir, berhentiHadir,
-    mulai, kirimJawaban, menyerah, klaimPutus, hapusRoom, ajak, bacaAjakan,
+    ubahAtur, aturSiap, mulai, kirimJawaban, kirimMaju, menyerah, klaimPutus, hapusRoom, ajak, bacaAjakan,
     waktuServer, saatSambungBerubah,
     uid: () => uid,
     tersambung: () => tersambung,

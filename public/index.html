@@ -518,7 +518,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
   --lebar-sedia: min(calc((var(--lebar-layar) - 32px - 5 * var(--celah-sedia)) / 6), 64px);
   --lebar-slot: min(
     calc((var(--lebar-layar) - 32px - 2 * var(--celah)) / 3),
-    calc((var(--tinggi) - 190px - var(--pool-baris) * (var(--lebar-sedia) * 1.4 + var(--celah-sedia)) - 2 * var(--celah)) / 3 / 1.4),
+    calc((var(--tinggi) - 190px - var(--ekstra-duel, 0px) - var(--pool-baris) * (var(--lebar-sedia) * 1.4 + var(--celah-sedia)) - 2 * var(--celah)) / 3 / 1.4),
     120px
   );
   display: flex; flex-direction: column; gap: 8px; padding: 8px 16px;
@@ -560,7 +560,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
 .toast-sub { font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--teks); }
 @keyframes toast-naik { to { translate: 0 -6px; } }
 .area-solo {
-  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 8px;
 }
 .sisi-solo { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
@@ -739,16 +739,70 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
 .kartu-online small { color: var(--redup); font-size: 13px; line-height: 1.35; font-variant-numeric: tabular-nums; }
 #galat-online { margin: 0 0 12px; }
 #layar-online.sibuk :is(.tombol-menu, input, .segmen button) { pointer-events: none; opacity: .55; }
-#online-tunggu { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 8px; text-align: center; }
-#online-tunggu .tombol-menu { width: min(280px, 100%); }
-#judul-tunggu { margin: 0; color: var(--redup); font-size: 16px; line-height: 1.4; }
+#online-tunggu { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+#online-tunggu .tombol-menu { width: min(280px, 100%); padding-block: 12px; }
+#judul-tunggu { margin: 0; color: var(--redup); font-size: 15px; line-height: 1.4; }
 #kode-room {
-  margin: 0; padding: 6px 4px 6px calc(4px + .18em); font-size: clamp(40px, 13vw, 58px); line-height: 1.1; font-weight: 800;
+  margin: 0; padding: 2px 4px 2px calc(4px + .18em); font-size: clamp(34px, 11vw, 48px); line-height: 1.1; font-weight: 800;
   letter-spacing: .18em; font-variant-numeric: tabular-nums; user-select: all; -webkit-user-select: all;
 }
+#pemain-tunggu { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: min(360px, 100%); }
+#pemain-tunggu[hidden], #atur-tunggu[hidden] { display: none; }
+.pemain-tunggu {
+  display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 7px 10px; border-radius: 12px;
+  background: var(--malam-2); border: 2px solid var(--garis); transition: border-color .2s;
+}
+.pemain-tunggu b { font-size: 15px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pemain-tunggu span { font-size: 12px; line-height: 1.25; font-weight: 700; color: var(--redup); }
+.pemain-tunggu.siap { border-color: var(--benar); }
+.pemain-tunggu.siap span { color: var(--benar); }
+.pemain-tunggu.kosong b { color: var(--redup); font-weight: 600; }
+#atur-tunggu { display: flex; flex-direction: column; gap: 6px; width: min(360px, 100%); }
+#atur-tunggu .segmen button { flex: 1; min-width: 0; padding: 0 4px; white-space: nowrap; }
+#atur-tunggu.tetap .segmen button { cursor: default; }
+#atur-tunggu.tetap .segmen button:active { transform: none; }
+#atur-tunggu.tetap .segmen button[aria-checked="false"] { opacity: .45; }
+#info-atur { min-height: 49px; color: var(--redup); font-size: 12px; line-height: 1.35; font-variant-numeric: tabular-nums; }
 #angka-mundur { margin: 0; font-size: 96px; line-height: 1; font-weight: 800; color: var(--p1); font-variant-numeric: tabular-nums; }
-#status-tunggu { margin: 0; min-height: 44px; font-size: 16px; line-height: 1.4; font-weight: 700; }
+#status-tunggu { margin: 0; min-height: 21px; font-size: 15px; line-height: 1.4; font-weight: 700; }
 #catatan-tunggu { margin: 0; color: var(--redup); font-size: 13px; line-height: 1.4; }
+
+/* Bilah skor duel online: di bawah judul saat tegak, dan sebaris dengan judul saat mendatar. */
+#layar-solo.duel { --ekstra-duel: 44px; }
+#layar-solo.duel .bar-solo { flex-wrap: wrap; }
+#bilah-duel {
+  flex: 0 0 100%; order: 9; display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1.5fr);
+  align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: 12px;
+  background: var(--malam-2); border: 1px solid var(--garis); font-variant-numeric: tabular-nums;
+}
+#bilah-duel[hidden] { display: none; }
+.nama-duel { font-size: 13px; line-height: 1.2; font-weight: 700; color: var(--redup); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skor-duel { min-width: 16px; font-size: 22px; line-height: 1; font-weight: 800; text-align: center; }
+#skor-saya { color: var(--p1); }
+#skor-lawan { color: var(--p2); }
+#info-duel { font-size: 12px; font-weight: 700; color: var(--redup); white-space: nowrap; }
+.lawan-duel { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; min-width: 0; }
+.lawan-duel .nama-duel { max-width: 100%; }
+#titik-lawan { display: flex; gap: 3px; }
+#titik-lawan i { width: 7px; height: 7px; border-radius: 50%; background: var(--garis); transition: background-color .15s; }
+#titik-lawan i.isi { background: var(--p2); }
+@media (orientation: landscape) {
+  #layar-solo.duel .bar-solo { flex-wrap: nowrap; }
+  #bilah-duel { flex: 1.3 1 0; order: 0; min-width: 0; }
+}
+
+/* Di antara dua ronde rebutan: pemenang ronde, skor, dan hitung mundur ke ronde berikutnya. */
+#lapis-ronde { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+#lapis-ronde[hidden] { display: none; }
+.kotak-ronde {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 26px; border-radius: 20px;
+  text-align: center; background: var(--toast); border: 2px solid var(--garis); box-shadow: 0 12px 30px var(--bayang-toast);
+}
+#lapis-ronde.menang .kotak-ronde { border-color: var(--benar); }
+#lapis-ronde.kalah .kotak-ronde { border-color: var(--salah); }
+#judul-ronde { margin: 0; font-size: 18px; line-height: 1.3; font-weight: 800; }
+#skor-ronde { margin: 0; font-size: 40px; line-height: 1.1; font-weight: 800; font-variant-numeric: tabular-nums; }
+#mundur-ronde { margin: 0; font-size: 13px; line-height: 1.3; font-weight: 700; color: var(--redup); font-variant-numeric: tabular-nums; }
 #judul-hasil.netral { color: var(--teks); }
 
 /* Layar pendek: tombol menu berjajar supaya tidak perlu digulir. */
@@ -756,13 +810,17 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
   #layar-menu { flex-flow: row wrap; align-content: center; gap: 10px; }
   #layar-menu .baris-menu { display: contents; }
   #angka-mundur { font-size: 64px; }
-  #online-tunggu {
+  /* Ruang tunggu mendatar: pemain dan tombol di kiri, pengaturan di kanan. */
+  #online-tunggu:not(.hitung) {
     display: grid; grid-template-columns: 1fr 1fr; grid-auto-flow: dense;
-    justify-items: center; align-items: center; gap: 8px 24px; padding-top: 0;
+    justify-items: center; align-items: center; gap: 6px 24px;
   }
-  #judul-tunggu, #kode-room, #angka-mundur, #status-tunggu { grid-column: 1; }
-  #tombol-bagi-kode, #tombol-batal-room, #catatan-tunggu { grid-column: 2; }
-  #kode-room { font-size: 40px; }
+  #judul-tunggu, #kode-room, #tombol-bagi-kode, #pemain-tunggu, #status-tunggu, #tombol-siap, #tombol-batal-room { grid-column: 1; }
+  #atur-tunggu, #catatan-tunggu { grid-column: 2; }
+  #atur-tunggu { grid-row: 1 / span 5; }
+  #kode-room { font-size: 34px; }
+  #online-tunggu .tombol-menu { padding-block: 8px; font-size: 16px; }
+  #layar-online .bar-toko { margin-bottom: 6px; }
   #layar-menu .logo, #layar-menu h1, #layar-menu .slogan { flex: 0 0 100%; justify-content: center; }
   #layar-menu .logo svg { width: 44px; height: 62px; }
   /* Enam tombol dalam satu baris: lebarnya mengikuti teks, supaya tidak ada yang terlipat dua baris. */
@@ -888,12 +946,14 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     </ul>
     <p>Buntu, tidak ada yang melihat rasi? Kalau <b>kedua</b> pemain menekan <b>Tukar</b>, tiga kartu diganti dan poin tidak berubah.</p>
     <h3>Duel online</h3>
-    <p>Main melawan teman dari HP masing-masing. Isi username, lalu <b>buat room</b> dan bagikan kodenya, atau <b>gabung</b> dengan kode dari temanmu.</p>
+    <p>Main melawan teman dari HP masing-masing. Isi username, lalu <b>buat room</b> dan bagikan kodenya, atau <b>gabung</b> dengan kode dari temanmu. Pertandingan mulai setelah kalian berdua menekan <b>Siap</b>.</p>
     <ul>
-      <li>Kalian mendapat puzzle yang sama. Yang pertama mengunci jawaban benar menang.</li>
-      <li>Kunci jawaban yang salah membekukan tombol kunci selama 5 detik, tanpa menunjukkan letak kesalahannya.</li>
-      <li>Kalau waktu habis, pemain dengan kartu benar terbanyak menang. Kalau jumlahnya sama, hasilnya seri.</li>
-      <li>Koneksi yang terputus diberi 30 detik untuk kembali. Lewat dari itu, atau kalau keluar di tengah duel, lawan menang.</li>
+      <li>Pembuat room memilih tingkat, panjang pertandingan (3, 5, 7, atau 10 poin), dan sistemnya.</li>
+      <li><b>Rebutan:</b> kalian mengerjakan puzzle yang sama. Yang lebih dulu mengunci jawaban benar dapat 1 poin, lalu kalian pindah ke ronde berikutnya. Kalau waktu ronde habis, tidak ada yang dapat poin.</li>
+      <li><b>Balapan:</b> setiap puzzle yang kamu selesaikan memberi 1 poin, dan kamu langsung lanjut tanpa menunggu lawan. Yang pertama mencapai poin target menang.</li>
+      <li>Skor dan jumlah slot yang sudah diisi lawan terlihat di atas papan.</li>
+      <li>Kunci jawaban yang salah membekukan tombol kunci selama 7 detik, tanpa menunjukkan letak kesalahannya.</li>
+      <li>Koneksi yang terputus diberi 30 detik untuk kembali. Lewat dari itu, atau kalau keluar di tengah pertandingan, lawan menang.</li>
       <li>Tidak ada Hint dan Extra Time, dan duel online tidak memberi Stars.</li>
     </ul>
     <button class="tombol-menu utama" id="tombol-tutup-cara">Kembali</button>
@@ -949,12 +1009,26 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
       <span id="judul-level"></span>
       <div class="timer" id="timer-solo" hidden><i></i></div>
     </div>
+    <div id="bilah-duel" hidden>
+      <span class="nama-duel">Kamu</span>
+      <b class="skor-duel" id="skor-saya">0</b>
+      <span id="info-duel"></span>
+      <b class="skor-duel" id="skor-lawan">0</b>
+      <span class="lawan-duel"><span class="nama-duel" id="nama-lawan-duel"></span><span id="titik-lawan" role="img"></span></span>
+    </div>
     <button class="ikon" id="tombol-kosongkan" aria-label="Kosongkan papan">
       <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/></svg>
     </button>
     <button class="ikon tombol-suara" aria-label="Matikan suara dan getar"></button>
   </div>
   <div class="area-solo">
+    <div id="lapis-ronde" aria-live="polite" hidden>
+      <div class="kotak-ronde">
+        <p id="judul-ronde"></p>
+        <p id="skor-ronde"></p>
+        <p id="mundur-ronde"></p>
+      </div>
+    </div>
     <div id="papan" role="group" aria-label="Papan 3 kali 3"></div>
     <div class="sisi-solo">
       <p id="pesan-solo" aria-live="polite"></p>
@@ -1020,12 +1094,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
       <p class="keterangan peringatan" id="galat-online" role="alert" hidden></p>
       <div class="kartu-online">
         <h3>Buat room</h3>
-        <div class="segmen" id="segmen-kesulitan" role="radiogroup" aria-label="Tingkat kesulitan">
-          <button role="radio" data-kesulitan="easy">Mudah</button>
-          <button role="radio" data-kesulitan="medium">Sedang</button>
-          <button role="radio" data-kesulitan="hard">Sulit</button>
-        </div>
-        <small id="info-kesulitan"></small>
+        <small>Tingkat, jumlah poin, dan sistem permainan dipilih di ruang tunggu.</small>
         <button class="tombol-menu utama" id="tombol-buat-room">Buat room</button>
       </div>
       <div class="kartu-online">
@@ -1038,10 +1107,33 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     <div id="online-tunggu" hidden>
       <p id="judul-tunggu"></p>
       <p id="kode-room" aria-label="Kode room"></p>
+      <button class="tombol-menu" id="tombol-bagi-kode">Bagikan kode</button>
+      <div id="pemain-tunggu" hidden>
+        <div class="pemain-tunggu" id="kartu-saya"><b id="nama-saya-tunggu"></b><span id="siap-saya"></span></div>
+        <div class="pemain-tunggu" id="kartu-lawan"><b id="nama-lawan-tunggu"></b><span id="siap-lawan"></span></div>
+      </div>
+      <div id="atur-tunggu" hidden>
+        <div class="segmen" id="segmen-kesulitan" role="radiogroup" aria-label="Tingkat kesulitan">
+          <button role="radio" data-atur="kesulitan" data-nilai="easy">Mudah</button>
+          <button role="radio" data-atur="kesulitan" data-nilai="medium">Sedang</button>
+          <button role="radio" data-atur="kesulitan" data-nilai="hard">Sulit</button>
+        </div>
+        <div class="segmen" id="segmen-target" role="radiogroup" aria-label="Poin untuk menang">
+          <button role="radio" data-atur="target" data-nilai="3">3 poin</button>
+          <button role="radio" data-atur="target" data-nilai="5">5 poin</button>
+          <button role="radio" data-atur="target" data-nilai="7">7 poin</button>
+          <button role="radio" data-atur="target" data-nilai="10">10 poin</button>
+        </div>
+        <div class="segmen" id="segmen-sistem" role="radiogroup" aria-label="Sistem permainan">
+          <button role="radio" data-atur="sistem" data-nilai="rebutan">Rebutan</button>
+          <button role="radio" data-atur="sistem" data-nilai="balapan">Balapan</button>
+        </div>
+        <small id="info-atur"></small>
+      </div>
       <p id="angka-mundur" aria-hidden="true" hidden></p>
       <p id="status-tunggu" aria-live="polite"></p>
-      <button class="tombol-menu utama" id="tombol-bagi-kode">Bagikan kode</button>
-      <button class="tombol-menu" id="tombol-batal-room">Batalkan</button>
+      <button class="tombol-menu utama" id="tombol-siap" hidden>Siap</button>
+      <button class="tombol-menu" id="tombol-batal-room">Keluar</button>
       <p id="catatan-tunggu"></p>
     </div>
   </div>
@@ -1812,7 +1904,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     },
     online: {
       judul: 'Keluar dari duel?',
-      teks: 'Kamu dihitung kalah, dan lawanmu menang.',
+      teks: 'Kamu dihitung kalah di seluruh pertandingan, dan lawanmu menang.',
       tombol: 'tombol-solo-keluar',
     },
   };
@@ -2096,7 +2188,6 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
   // Duel online. Dideklarasikan di sini karena dipakai juga oleh kode papan Solo.
   let modeOnline = false;
   let online = null; // room yang sedang diikuti, atau null
-  let kesulitanOnline = 'medium';
   let tiketOnline = 0;
   let pesanLawan = null;
   let bekuKunciSampai = 0;
@@ -2428,6 +2519,8 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     detikBekuTampil = null;
     $('judul-level').classList.remove('gawat');
     $('layar-solo').classList.toggle('ranked', pakaiTimer);
+    $('layar-solo').classList.toggle('duel', modeOnline);
+    $('bilah-duel').hidden = !modeOnline;
     $('timer-solo').hidden = !pakaiTimer;
     $('layar-solo').style.setProperty('--pool-baris', Math.ceil(sesi.tersedia.length / KARTU_PER_BARIS));
 
@@ -3005,7 +3098,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
   }
 
   function keluarSolo() {
-    if (onlineBerjalan()) bukaDialogKeluar('online');
+    if (duelBerlangsung()) bukaDialogKeluar('online');
     else if (modeOnline) tinggalkanOnline();
     else if (rankedBerjalan()) bukaDialogKeluar('ranked');
     else kembaliKePeta();
@@ -3137,7 +3230,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     if (modeOnline && pesanLawan) return pesanLawan;
     if (pesanSementara) return pesanSementara.teks;
     if (sesi.terpilih !== null) return 'Sekarang ketuk slot untuk kartu ini.';
-    if (modeOnline) return `Kunci jawaban benar lebih dulu dari ${namaLawanOnline()}.`;
+    if (modeOnline) return teksAwalOnline();
     if (modeRanked) return 'Susun papan sebelum waktu habis.';
     return levelAktif.pesan || 'Setiap baris dan kolom harus jadi rasi.';
   }
@@ -3199,6 +3292,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     hapusSorot();
     gambarSolo();
     terbangkanPerubahan(sebelum, kecuali, jeda);
+    if (modeOnline) catatMajuOnline();
     return true;
   }
 
@@ -3773,11 +3867,14 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     hitungNaik($('detail-hasil'), detik, (d) => `Waktu ${formatWaktu(d)}, kunci salah ${kunciSalah} kali`);
   }
 
-  /* Duel online (tahap 4a). Aturannya ada di duel-online.js, dan sambungannya di online.js. */
+  /* Duel online beronde (tahap 4a). Aturannya ada di duel-online.js, dan sambungannya di online.js. */
   const DO = window.DuelOnline;
   const KUNCI_NAMA = 'setdoku-nama';
+  const KUNCI_ATUR = 'setdoku-atur-duel';
   const KUNCI_ROOM_LAMA = 'setdoku-room-lama';
-  const UMUR_HAPUS_ROOM_MS = 35 * 60 * 1000;
+  // Lebih lama dari pertandingan terpanjang, supaya room yang masih dimainkan tidak ikut terhapus.
+  const UMUR_HAPUS_ROOM_MS = 185 * 60 * 1000;
+  const JEDA_PUZZLE_BALAPAN_MS = 600; // papan yang benar sempat menyala hijau sebelum puzzle berikutnya
   const LABEL_BAGI = navigator.share ? 'Bagikan kode' : 'Salin kode';
   const PESAN_GALAT_ONLINE = {
     jaringan: 'Tidak bisa tersambung. Periksa internetmu, lalu coba lagi.',
@@ -3791,8 +3888,16 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
   const pesanGalatOnline = (e) => PESAN_GALAT_ONLINE[e && e.jenis] || PESAN_GALAT_ONLINE.gagal;
 
   const onlineBerjalan = () => modeOnline && sesi !== null && !sesi.selesai;
+  // Pertandingan masih berlangsung, termasuk jeda antarronde saat papannya sudah terkunci.
+  const duelBerlangsung = () => modeOnline && online !== null && online.papanTampil && !online.hasilTampil;
   const sisaBekuKunci = () => (modeOnline ? Math.max(0, bekuKunciSampai - performance.now()) : 0);
   const namaLawanOnline = () => (online && online.namaLawan) || 'lawan';
+
+  function teksAwalOnline() {
+    const atur = online && online.room && online.room.atur;
+    if (atur && atur.sistem === 'balapan') return `Selesaikan ${atur.target} puzzle lebih dulu dari ${namaLawanOnline()}.`;
+    return `Kunci jawaban benar lebih dulu dari ${namaLawanOnline()}.`;
+  }
 
   function tulis(el, teks) {
     if (el.textContent !== teks) el.textContent = teks;
@@ -3821,13 +3926,13 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     $('tombol-gabung').textContent = tombol === 'tombol-gabung' ? teks : 'Gabung';
   }
 
-  function tandaiKesulitan() {
-    document.querySelectorAll('#segmen-kesulitan button').forEach((b) => {
-      const aktif = b.dataset.kesulitan === kesulitanOnline;
-      b.setAttribute('aria-checked', aktif ? 'true' : 'false');
-      b.tabIndex = aktif ? 0 : -1;
-    });
-    $('info-kesulitan').textContent = `Waktu ${formatWaktu(R.DURASI_MS[kesulitanOnline] / 1000)}. Kalian mendapat puzzle yang sama.`;
+  // Pengaturan terakhir diingat, supaya room berikutnya langsung memakai kebiasaan pemain.
+  function aturTersimpan() {
+    try {
+      const a = JSON.parse(localStorage.getItem(KUNCI_ATUR));
+      if (DO.aturSah(a)) return { kesulitan: a.kesulitan, target: a.target, sistem: a.sistem };
+    } catch (e) {}
+    return { ...DO.ATUR_AWAL };
   }
 
   function ingatRoom(kode) {
@@ -3862,7 +3967,6 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     $('input-kode').value = kodeAwal;
     galatOnline(null);
     aturSibukOnline();
-    tandaiKesulitan();
     tampilanOnline('lobi');
     tampilkan('online', 'maju');
     // SDK dimuat dari sekarang, supaya Buat room dan Gabung terasa cepat. Kalau gagal,
@@ -3892,7 +3996,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     galatOnline(null);
     aturSibukOnline('tombol-buat-room', 'Membuat room…');
     try {
-      const kode = await Online.buatRoom({ nama, kesulitan: kesulitanOnline });
+      const kode = await Online.buatRoom({ nama, atur: aturTersimpan() });
       if (tiket !== tiketOnline) {
         Online.hapusRoom(kode).catch(() => {});
         return;
@@ -3943,14 +4047,22 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
       room: undefined, // undefined: data room belum tiba. null: room sudah tidak ada.
       namaLawan: null,
       papanTampil: false,
+      rondeTampil: null, // ronde yang papannya sedang terpasang
       hasilTampil: false,
-      mulaiDikirim: false,
-      jawabanDikirim: false,
-      jawabanTiba: false,
+      mulaiSetelah: 0,
+      dikirim: new Set(), // ronde yang jawabannya sudah dikirim
+      belumTiba: new Set(), // ronde yang jawabannya belum dikonfirmasi server
+      tahanSampai: 0,
+      jedaTampil: null,
       klaimSetelah: 0,
       lawanPutus: false,
       sayaPutus: !Online.tersambung(),
       detikMundur: null,
+      revTampil: null,
+      skorTampil: null,
+      titikTampil: null,
+      majuTerkirim: null,
+      idMaju: null,
       ajakanTampil: false,
       sayaMengajak: false,
       sibukLagi: false,
@@ -3963,9 +4075,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     tulis($('judul-tunggu'), '');
     tulis($('status-tunggu'), 'Menyambung…');
     tulis($('catatan-tunggu'), '');
-    $('kode-room').hidden = true;
-    $('angka-mundur').hidden = true;
-    $('tombol-bagi-kode').hidden = true;
+    ['kode-room', 'angka-mundur', 'tombol-bagi-kode', 'pemain-tunggu', 'atur-tunggu', 'tombol-siap'].forEach((id) => { $(id).hidden = true; });
     $('tombol-batal-room').hidden = false;
     tampilanOnline('tunggu');
     if (layarAktif !== 'online') tampilkan('online', 'mundur');
@@ -3992,9 +4102,11 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     if (!o) return;
     online = null;
     clearInterval(o.idDetak);
+    clearTimeout(o.idMaju);
     if (o.berhentiPantau) o.berhentiPantau();
     if (o.berhentiSambung) o.berhentiSambung();
     Online.berhentiHadir();
+    tutupJedaRonde();
   }
 
   function keLobiOnline(pesan = null) {
@@ -4012,7 +4124,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     tampilkan('online', 'mundur');
   }
 
-  // Keluar dari room. Yang dikabarkan ke lawan bergantung pada tahap duelnya.
+  // Keluar dari room. Yang dikabarkan ke lawan bergantung pada tahap pertandingannya.
   function tinggalkanOnline(pesan = null) {
     const o = online;
     if (o && o.room) {
@@ -4020,7 +4132,7 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
       if (fase === 'menunggu' || fase === 'kedaluwarsa') {
         // Kalau lawan keburu bergabung, room tidak bisa dihapus lagi, jadi duelnya dibatalkan.
         Online.hapusRoom(o.kode).catch(() => Online.menyerah(o.kode).catch(() => {}));
-      } else if (fase === 'siap' || fase === 'hitung' || fase === 'main') {
+      } else if (['siap', 'hitung', 'main', 'jeda', 'tunggu'].includes(fase)) {
         Online.menyerah(o.kode).catch(() => {});
       }
     }
@@ -4030,6 +4142,26 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
   function menyerahOnline() {
     tutupOverlay($('dialog-keluar'));
     tinggalkanOnline();
+  }
+
+  // Jawaban sendiri yang belum dikonfirmasi server belum dihitung. Jam server bisa saja
+  // menempatkannya setelah jawaban lawan, jadi poin tidak diumumkan sebelum pasti.
+  function roomTerkonfirmasi(o) {
+    const { room } = o;
+    if (!o.belumTiba.size || !room.ronde) return room;
+    const uid = Online.uid();
+    const ronde = {};
+    Object.keys(room.ronde).forEach((r) => {
+      const isi = room.ronde[r];
+      if (!isi) return;
+      if (!o.belumTiba.has(Number(r)) || !isi[uid]) {
+        ronde[r] = isi;
+        return;
+      }
+      ronde[r] = {};
+      Object.keys(isi).forEach((p) => { if (p !== uid) ronde[r][p] = isi[p]; });
+    });
+    return { ...room, ronde };
   }
 
   // Dipanggil setiap data room berubah, dan empat kali per detik karena fase juga bergantung pada waktu.
@@ -4043,39 +4175,60 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
       return;
     }
     const sekarang = Online.waktuServer();
-    const k = DO.keadaan(room, LEVEL, uid, sekarang);
+    const k = DO.keadaan(roomTerkonfirmasi(o), LEVEL, uid, sekarang);
     o.namaLawan = k.namaLawan;
     if (k.fase === 'kedaluwarsa') {
       Online.hapusRoom(o.kode).catch(() => {});
       keLobiOnline('Kode room kedaluwarsa karena belum ada yang bergabung. Buat room baru.');
     } else if (k.fase === 'batal') {
       keLobiOnline(`${k.namaLawan || 'Lawan'} keluar sebelum duel dimulai.`);
-    } else if (k.fase === 'menunggu' || k.fase === 'siap' || k.fase === 'hitung') {
-      // Pembuat room memulai duel hanya saat game-nya sedang dibuka, bukan saat ia masih di aplikasi chat.
-      if (DO.bisaMulai(room, uid) && !o.mulaiDikirim && document.visibilityState === 'visible' && Online.tersambung()) {
-        o.mulaiDikirim = true;
-        Online.mulai(o.kode).catch(() => { o.mulaiDikirim = false; });
+    } else if (k.fase === 'menunggu' || k.fase === 'siap') {
+      // T-5: begitu keduanya siap, HP pembuat room menulis waktu mulai dan daftar puzzle-nya.
+      if (DO.bisaMulai(room, uid) && performance.now() >= o.mulaiSetelah && Online.tersambung()) {
+        o.mulaiSetelah = performance.now() + 3000;
+        Online.mulai(o.kode, DO.pilihDaftarPuzzle(LEVEL, room.atur)).catch(() => {});
       }
       gambarTunggu(k, sekarang);
-    } else if (k.fase === 'main') {
-      if (!o.papanTampil) mulaiPapanOnline(k, sekarang);
-      else pantauLawanOnline(k, sekarang);
-    } else if (k.fase === 'hitung-hasil') {
-      if (!o.papanTampil) gambarTunggu(k, sekarang);
-      else if (onlineBerjalan()) habisOnline();
-    } else if (!o.hasilTampil) {
-      // Kemenangan sendiri baru diumumkan setelah jawabannya benar-benar tiba di server.
-      if (k.hasil.alasan === 'benar' && k.hasil.pemenang === uid && !o.jawabanTiba) return;
-      tampilkanHasilOnline(k);
+    } else if (k.fase === 'selesai') {
+      if (!o.hasilTampil) tampilkanHasilOnline(k);
+      else perbaruiAjakan();
+    } else if (!o.papanTampil && k.fase !== 'main') {
+      // Hitung mundur awal, atau pemain yang masuk lagi tepat di antara dua ronde.
+      gambarTunggu(k, sekarang);
     } else {
-      perbaruiAjakan();
+      if (k.fase === 'main') {
+        if (o.rondeTampil !== k.ronde && performance.now() >= o.tahanSampai) mulaiPapanOnline(k, sekarang);
+      } else if (k.fase === 'jeda') {
+        tampilkanJedaRonde(k, sekarang);
+      } else if (onlineBerjalan()) {
+        habisOnline();
+      }
+      gambarBilahDuel(k);
+      pantauLawanOnline(k, sekarang);
     }
+  }
+
+  function tandaiAtur(atur, bisaUbah) {
+    document.querySelectorAll('#atur-tunggu [data-atur]').forEach((b) => {
+      const aktif = String(atur[b.dataset.atur]) === b.dataset.nilai;
+      b.setAttribute('aria-checked', aktif ? 'true' : 'false');
+      b.setAttribute('aria-disabled', bisaUbah ? 'false' : 'true');
+      b.tabIndex = aktif && bisaUbah ? 0 : -1;
+    });
+    $('atur-tunggu').classList.toggle('tetap', !bisaUbah);
+    const ronde = formatWaktu(R.DURASI_MS[atur.kesulitan] / 1000);
+    tulis($('info-atur'), atur.sistem === 'rebutan'
+      ? `Rebutan: yang lebih dulu mengunci benar dapat 1 poin, lalu kalian pindah ronde. Paling banyak ${DO.jumlahRonde(atur)} ronde, ${ronde} per ronde.`
+      : `Balapan: setiap puzzle yang kamu selesaikan memberi 1 poin. Yang pertama menyelesaikan ${atur.target} puzzle menang. Batas waktu ${formatWaktu(DO.durasiTimer(atur) / 1000)}.`);
   }
 
   function gambarTunggu(k, sekarang) {
     const o = online;
-    const tuan = o.room.tuan === Online.uid();
+    const uid = Online.uid();
+    const tuan = o.room.tuan === uid;
     const nama = k.namaLawan || 'lawan';
+    const ruang = k.fase === 'menunggu' || k.fase === 'siap';
+    const lawan = (o.room.pemain || {})[k.lawan] || {};
     let judul = `Melawan ${nama}`;
     let status = 'Bersiap…';
     let catatan = '';
@@ -4083,15 +4236,18 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     if (k.fase === 'menunggu') {
       judul = 'Bagikan kode ini ke temanmu';
       status = o.sayaPutus ? 'Koneksi terputus. Menyambung lagi…' : 'Menunggu lawan bergabung…';
-      catatan = `Kode berlaku ${DO.MASA_TUNGGU_MS / 60000} menit. Tingkat ${NAMA_KESULITAN[o.room.kesulitan]}.`;
+      catatan = `Kode berlaku ${DO.MASA_TUNGGU_MS / 60000} menit.`;
     } else if (k.fase === 'siap') {
-      const lawan = (o.room.pemain || {})[k.lawan] || {};
-      judul = tuan ? 'Lawan ditemukan' : `Room ${o.kode}`;
+      judul = `Room ${o.kode}`;
       if (o.sayaPutus) status = 'Koneksi terputus. Menyambung lagi…';
-      else if (!tuan) status = `Menunggu ${nama} memulai duel…`;
-      else status = lawan.tersambung === true ? `${nama} bergabung. Memulai duel…` : `Menunggu ${nama} tersambung lagi…`;
-    } else if (k.fase === 'hitung') {
-      mundur = Math.min(3, Math.max(1, Math.ceil((k.mulaiMain - sekarang) / 1000)));
+      else if (lawan.tersambung !== true) status = `Menunggu ${nama} tersambung lagi…`;
+      else if (k.siapSaya && k.siapLawan) status = 'Keduanya siap. Memulai…';
+      else if (k.siapSaya) status = `Menunggu ${nama} siap…`;
+      else status = k.siapLawan ? `${nama} sudah siap. Tekan Siap untuk mulai.` : 'Tekan Siap kalau sudah siap.';
+      if (!tuan) catatan = `Pengaturan dipilih ${nama}.`;
+    } else if (k.fase === 'hitung' || k.fase === 'jeda') {
+      mundur = Math.min(3, Math.max(1, Math.ceil((k.mulai - sekarang) / 1000)));
+      if (k.fase === 'jeda') status = `Ronde ${k.ronde + 1} segera mulai`;
     } else {
       status = 'Waktu habis. Menghitung hasil…';
     }
@@ -4100,7 +4256,31 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     tulis($('catatan-tunggu'), catatan);
     $('kode-room').hidden = k.fase !== 'menunggu';
     $('tombol-bagi-kode').hidden = k.fase !== 'menunggu';
-    $('tombol-batal-room').hidden = k.fase !== 'menunggu' && k.fase !== 'siap';
+    $('pemain-tunggu').hidden = !ruang;
+    $('atur-tunggu').hidden = !ruang || !k.atur;
+    $('tombol-siap').hidden = k.fase !== 'siap';
+    $('tombol-batal-room').hidden = !ruang;
+    $('online-tunggu').classList.toggle('hitung', !ruang);
+
+    if (ruang) {
+      tulis($('nama-saya-tunggu'), ((o.room.pemain || {})[uid] || {}).nama || 'Kamu');
+      tulis($('siap-saya'), k.fase === 'menunggu' ? 'Kamu' : k.siapSaya ? 'Siap' : 'Belum siap');
+      $('kartu-saya').classList.toggle('siap', k.siapSaya);
+      tulis($('nama-lawan-tunggu'), k.namaLawan || 'Belum ada lawan');
+      tulis($('siap-lawan'), k.fase === 'menunggu' ? 'Menunggu…' : k.siapLawan ? 'Siap' : 'Belum siap');
+      $('kartu-lawan').classList.toggle('siap', k.siapLawan);
+      $('kartu-lawan').classList.toggle('kosong', k.fase === 'menunggu');
+      if (k.atur) {
+        tandaiAtur(k.atur, tuan);
+        // T-4: pengaturan yang berubah membatalkan siap, jadi tamu diberi tahu.
+        if (o.revTampil !== null && o.revTampil !== k.atur.rev && !tuan) pesanMelayang('Pengaturan diubah', 'info', 'Periksa dulu, lalu tekan Siap');
+        o.revTampil = k.atur.rev;
+      }
+      const siap = $('tombol-siap');
+      tulis(siap, k.siapSaya ? 'Batal siap' : 'Siap');
+      siap.classList.toggle('utama', !k.siapSaya);
+    }
+
     const angka = $('angka-mundur');
     angka.hidden = mundur === null;
     if (mundur !== null && o.detikMundur !== mundur) {
@@ -4112,29 +4292,150 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     }
   }
 
+  // T-2: hanya pembuat room yang mengubah pengaturan. Nomor versinya naik, jadi tanda siap
+  // yang diberikan untuk pengaturan lama tidak berlaku lagi.
+  function ubahAturOnline(bagian, nilai) {
+    const o = online;
+    if (!o || !o.room || o.room.tuan !== Online.uid() || !DO.aturSah(o.room.atur) || DO.sudahMulai(o.room)) return;
+    const lama = o.room.atur;
+    if (lama[bagian] === nilai) return;
+    const atur = { kesulitan: lama.kesulitan, target: lama.target, sistem: lama.sistem, rev: (lama.rev || 0) + 1, [bagian]: nilai };
+    if (!DO.aturSah(atur)) return;
+    try { localStorage.setItem(KUNCI_ATUR, JSON.stringify({ kesulitan: atur.kesulitan, target: atur.target, sistem: atur.sistem })); } catch (e) {}
+    getar(8);
+    Online.ubahAtur(o.kode, atur).catch(() => {
+      if (online === o) pesanMelayang('Pengaturan gagal diubah', 'peringatan');
+    });
+  }
+
+  function tekanSiapOnline() {
+    const o = online;
+    if (!o || !o.room || !o.room.tamu || !DO.aturSah(o.room.atur) || DO.sudahMulai(o.room)) return;
+    const siap = DO.sudahSiap(o.room, Online.uid());
+    Online.aturSiap(o.kode, siap ? -1 : o.room.atur.rev).catch(() => {
+      if (online === o) pesanMelayang('Gagal mengirim. Coba lagi.', 'peringatan');
+    });
+  }
+
   function mulaiPapanOnline(k, sekarang) {
     const o = online;
-    const puzzle = DO.ambilPuzzle(LEVEL, o.room);
-    if (!puzzle) return;
+    const pertama = !o.papanTampil;
     o.papanTampil = true;
+    o.rondeTampil = k.ronde;
+    tutupJedaRonde();
     hentikanSolo();
     modeRanked = false;
     modeOnline = true;
     levelAktif = null;
     $('judul-level').textContent = 'Duel';
-    pasangPapan(puzzle);
-    tampilkan('solo', 'maju');
+    pasangPapan(k.puzzle);
+    if (layarAktif !== 'solo') tampilkan('solo', 'maju');
     gambarSolo();
     mainkanMasukPapan();
-    mulaiTimerRanked(R.DURASI_MS[o.room.kesulitan], k.tenggat - sekarang);
+    mulaiTimerRanked(DO.durasiTimer(o.room.atur), k.tenggat - sekarang);
+    catatMajuOnline(true);
     suara.tukar();
     getar(12);
+    if (!pertama && o.room.atur.sistem === 'balapan') pesanMelayang(`Puzzle ${k.ronde + 1} dari ${k.jumlahRonde}`, 'info');
+  }
+
+  // P-2: jumlah slot yang sudah diisi dilaporkan ke lawan. Hanya jumlahnya, bukan kartunya.
+  function catatMajuOnline(segera = false) {
+    const o = online;
+    if (!o || !modeOnline || !sesi || o.rondeTampil === null) return;
+    const isi = sesi.papan.filter((kartu, i) => kartu !== null && !sesi.tetap[i]).length;
+    const nilai = DO.kodeMaju(o.rondeTampil, isi);
+    clearTimeout(o.idMaju);
+    if (nilai === o.majuTerkirim) return;
+    o.idMaju = setTimeout(() => {
+      if (online !== o) return;
+      o.majuTerkirim = nilai;
+      Online.kirimMaju(o.kode, nilai).catch(() => {});
+    }, segera ? 0 : 200);
+  }
+
+  // P-1 sampai P-3: skor, nomor ronde, dan titik progres lawan di atas papan.
+  function gambarBilahDuel(k) {
+    const o = online;
+    const uid = Online.uid();
+    const { atur } = o.room;
+    const nama = k.namaLawan || 'Lawan';
+    const saya = k.skor[uid] || 0;
+    const lawan = k.skor[k.lawan] || 0;
+    tulis($('skor-saya'), String(saya));
+    tulis($('skor-lawan'), String(lawan));
+    tulis($('info-duel'), atur.sistem === 'rebutan' ? `Ronde ${k.ronde + 1}/${k.jumlahRonde}` : `Sampai ${atur.target} poin`);
+    tulis($('nama-lawan-duel'), atur.sistem === 'balapan' ? `${nama} · puzzle ${k.rondeLawan + 1}` : nama);
+    const kunci = `${k.kosongLawan}:${k.isiLawan}`;
+    if (o.titikTampil !== kunci) {
+      o.titikTampil = kunci;
+      const titik = $('titik-lawan');
+      titik.innerHTML = Array.from({ length: k.kosongLawan }, (_, i) => `<i${i < k.isiLawan ? ' class="isi"' : ''}></i>`).join('');
+      titik.setAttribute('aria-label', `${nama} sudah mengisi ${k.isiLawan} dari ${k.kosongLawan} slot`);
+    }
+    const lama = o.skorTampil;
+    o.skorTampil = { saya, lawan };
+    if (!lama) return;
+    if (saya > lama.saya && !G.kurangi()) G.gerakkan($('skor-saya')).dorong({ skala: 2.2 }, PEGAS.pipih);
+    if (lawan > lama.lawan) {
+      if (!G.kurangi()) G.gerakkan($('skor-lawan')).dorong({ skala: 2.2 }, PEGAS.pipih);
+      // Di rebutan, lapisan antarronde sudah mengumumkannya.
+      if (atur.sistem === 'balapan') pesanMelayang(`${nama} menyelesaikan puzzle ${lawan}`, 'info', `Skor ${saya}–${lawan}`);
+    }
+  }
+
+  function akhiriSesiOnline() {
+    hentikanTimerRanked();
+    if (!sesi || sesi.selesai) return;
+    const g = gestur;
+    gestur = null;
+    if (g && g.aktif) selesaikanSeret(g, performance.now(), true);
+    P.akhiriSesi(sesi);
+  }
+
+  function tutupJedaRonde() {
+    $('lapis-ronde').hidden = true;
+  }
+
+  // S1-2: di antara dua ronde rebutan, pemenang ronde dan skor tampil sebentar.
+  function tampilkanJedaRonde(k, sekarang) {
+    const o = online;
+    const uid = Online.uid();
+    const nama = k.namaLawan || 'Lawan';
+    const terakhir = k.riwayat[k.riwayat.length - 1] || { pemenang: null };
+    const menang = terakhir.pemenang === uid;
+    if (o.jedaTampil !== k.ronde) {
+      o.jedaTampil = k.ronde;
+      const mengunciBenar = !!sesi && sesi.selesai && !sesi.kalah;
+      akhiriSesiOnline();
+      tutupOverlay($('dialog-keluar'));
+      pesanLawan = null;
+      pesanSementara = { teks: menang ? 'Poin untukmu!' : terakhir.pemenang ? `${nama} lebih dulu.` : 'Waktu ronde habis.' };
+      gambarSolo();
+      if (menang && mengunciBenar) {
+        efekBenarSolo();
+      } else if (terakhir.pemenang && !menang) {
+        suara.salah();
+        getar([30, 40, 30]);
+      }
+      const lapis = $('lapis-ronde');
+      lapis.hidden = false;
+      lapis.classList.toggle('menang', menang);
+      lapis.classList.toggle('kalah', !!terakhir.pemenang && !menang);
+      if (!G.kurangi()) {
+        G.gerakkan(lapis.firstElementChild).set({ y: 16, buram: 0 });
+        G.gerakkan(lapis.firstElementChild).ke({ y: 0, buram: 1 }, PEGAS.pilih);
+      }
+    }
+    tulis($('judul-ronde'), menang ? `Kamu menang ronde ${k.ronde}` : terakhir.pemenang ? `${nama} menang ronde ${k.ronde}` : `Ronde ${k.ronde}: tidak ada poin`);
+    tulis($('skor-ronde'), `${k.skor[uid] || 0} – ${k.skor[k.lawan] || 0}`);
+    tulis($('mundur-ronde'), `Ronde ${k.ronde + 1} mulai dalam ${Math.max(1, Math.ceil((k.mulai - sekarang) / 1000))}`);
   }
 
   // O-5: lawan yang putus diberi waktu untuk kembali. Kalau lewat, pemain ini mengklaim menang.
   function pantauLawanOnline(k, sekarang) {
     const o = online;
-    if (!onlineBerjalan()) return;
+    if (!o.papanTampil || o.hasilTampil || !sesi) return;
     const uid = Online.uid();
     const nama = k.namaLawan || 'Lawan';
     const sisa = DO.sisaPutusMs(o.room, uid, sekarang);
@@ -4170,28 +4471,41 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     perbaruiOnline();
   }
 
-  function kirimJawabanOnline(kawat) {
+  function kirimJawabanOnline(ronde, kawat) {
     const o = online;
-    if (!o || o.jawabanDikirim) return;
-    o.jawabanDikirim = true;
-    const tiba = () => {
-      o.jawabanTiba = true;
+    if (!o || o.dikirim.has(ronde)) return;
+    o.dikirim.add(ronde);
+    o.belumTiba.add(ronde);
+    Online.kirimJawaban(o.kode, ronde, kawat).then(() => {
+      o.belumTiba.delete(ronde);
       if (online === o) perbaruiOnline();
-    };
-    Online.kirimJawaban(o.kode, kawat).then(tiba, tiba);
+    }, () => {
+      // Jawaban ditolak server: papan ronde ini dipasang ulang supaya pemain tidak macet.
+      o.belumTiba.delete(ronde);
+      o.dikirim.delete(ronde);
+      if (online !== o) return;
+      if (o.rondeTampil === ronde && !o.hasilTampil) {
+        o.rondeTampil = null;
+        o.tahanSampai = 0;
+        pesanMelayang('Jawaban gagal terkirim', 'peringatan', 'Susun lagi papannya');
+      }
+      perbaruiOnline();
+    });
   }
 
   function benarOnline() {
+    const o = online;
     hentikanTimerRanked();
     suara.benar();
     getar([15, 40, 15]);
     pesanSementara = { teks: 'Jawaban benar! Mengirim ke server…' };
     gambarSolo();
-    kirimJawabanOnline(DO.keKawat(sesi.papan));
+    o.tahanSampai = performance.now() + (G.kurangi() ? 0 : JEDA_PUZZLE_BALAPAN_MS);
+    kirimJawabanOnline(o.rondeTampil, DO.keKawat(sesi.papan));
   }
 
-  // O-4: kunci salah membekukan tombol kunci. Letak kesalahan tidak ditunjukkan,
-  // dan papan yang salah tidak pernah dikirim, jadi lawan tidak bisa mengintipnya.
+  // Kunci salah membekukan tombol kunci. Letak kesalahan tidak ditunjukkan, dan papan yang
+  // salah tidak pernah dikirim, jadi lawan tidak bisa mengintipnya.
   function salahOnline() {
     bekuKunciSampai = performance.now() + DO.BEKU_KUNCI_MS;
     detikBekuTampil = null;
@@ -4222,29 +4536,25 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     gambarSolo();
   }
 
-  // O-3: waktu habis. Papan apa adanya dikirim, lalu hasilnya dihitung dari posisi benar.
+  // Timer habis: waktu ronde di rebutan, atau batas waktu seluruh pertandingan di balapan.
+  // Tidak ada yang dikirim, karena papan yang belum benar tidak bernilai poin (K-2).
   function habisOnline() {
     if (!onlineBerjalan()) return;
-    hentikanTimerRanked();
-    const g = gestur;
-    gestur = null;
-    if (g && g.aktif) selesaikanSeret(g, performance.now(), true);
-    const kawat = DO.keKawat(sesi.papan);
-    P.akhiriSesi(sesi);
+    const rebutan = online && online.room && online.room.atur && online.room.atur.sistem === 'rebutan';
+    akhiriSesiOnline();
     tutupOverlay($('dialog-keluar'));
     suara.salah();
     getar([30, 40, 30]);
     $('timer-solo').firstElementChild.style.transform = 'scaleX(0)';
     $('judul-level').textContent = `Duel · ${formatWaktu(0)}`;
     pesanLawan = null;
-    pesanSementara = { teks: 'Waktu habis. Menghitung hasil…' };
+    pesanSementara = { teks: rebutan ? 'Waktu ronde habis.' : 'Waktu habis. Menghitung hasil…' };
     pesanMelayang('Waktu habis!', 'penalti');
     gambarSolo();
-    kirimJawabanOnline(kawat);
   }
 
   function labelMainLagi() {
-    return online && online.room && online.room.lanjut && !online.sayaMengajak ? 'Gabung ronde berikutnya' : 'Main lagi';
+    return online && online.room && online.room.lanjut && !online.sayaMengajak ? 'Gabung pertandingan baru' : 'Main lagi';
   }
 
   function tampilkanHasilOnline(k) {
@@ -4255,19 +4565,19 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
     const menang = h.pemenang === uid;
     const seri = h.pemenang === null;
     const batasPutus = DO.BATAS_PUTUS_MS / 1000;
+    const saya = (h.skor && h.skor[uid]) || 0;
+    const lawan = (h.skor && h.skor[k.lawan]) || 0;
     o.hasilTampil = true;
     // Hasil sudah final, jadi putus sambung sesudah ini tidak perlu dicatat lagi.
     Online.berhentiHadir();
     hentikanTimerRanked();
     tutupOverlay($('dialog-keluar'));
+    tutupJedaRonde();
     const mengunciBenar = o.papanTampil && !!sesi && sesi.selesai && !sesi.kalah;
     if (o.papanTampil && sesi) {
-      if (!sesi.selesai) {
-        const g = gestur;
-        gestur = null;
-        if (g && g.aktif) selesaikanSeret(g, performance.now(), true);
-        P.akhiriSesi(sesi);
-      }
+      akhiriSesiOnline();
+      tulis($('skor-saya'), String(saya));
+      tulis($('skor-lawan'), String(lawan));
       pesanLawan = null;
       pesanSementara = { teks: menang ? 'Kamu menang!' : seri ? 'Seri.' : 'Duel selesai.' };
       gambarSolo();
@@ -4275,10 +4585,10 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
 
     let judul = menang ? 'Kamu menang!' : seri ? 'Seri' : 'Kamu kalah';
     let detail;
-    if (h.alasan === 'benar') {
-      detail = menang ? 'Kamu mengunci jawaban benar lebih dulu.' : `${nama} mengunci jawaban benar lebih dulu.`;
+    if (h.alasan === 'poin') {
+      detail = `Skor akhir ${saya}–${lawan}.`;
     } else if (h.alasan === 'waktu') {
-      detail = `Waktu habis. Kartu benar: kamu ${h.benar[uid] || 0}, ${nama} ${h.benar[k.lawan] || 0}.`;
+      detail = `Waktu habis. Skor akhir ${saya}–${lawan}.`;
     } else if (h.alasan === 'menyerah') {
       detail = menang ? `${nama} keluar dari duel.` : 'Kamu keluar dari duel.';
     } else if (h.alasan === 'putus') {
@@ -4347,7 +4657,8 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
         await Online.gabungRoom(kode, nama);
       } else {
         o.sayaMengajak = true;
-        kode = await Online.buatRoom({ nama, kesulitan: o.room.kesulitan });
+        const { kesulitan, target, sistem } = o.room.atur;
+        kode = await Online.buatRoom({ nama, atur: { kesulitan, target, sistem } });
         try {
           await Online.ajak(o.kode, kode);
         } catch (e) {
@@ -4411,23 +4722,24 @@ h2 { font-size: 30px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01e
   $('tombol-gabung').addEventListener('click', gabungOnline);
   $('tombol-batal-room').addEventListener('click', () => tinggalkanOnline());
   $('tombol-bagi-kode').addEventListener('click', bagikanKode);
+  $('tombol-siap').addEventListener('click', tekanSiapOnline);
   $('input-nama').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
   $('input-kode').addEventListener('keydown', (e) => { if (e.key === 'Enter') gabungOnline(); });
-  document.querySelectorAll('#segmen-kesulitan button').forEach((b) => b.addEventListener('click', () => {
-    if (kesulitanOnline === b.dataset.kesulitan) return;
-    kesulitanOnline = b.dataset.kesulitan;
-    tandaiKesulitan();
-    getar(8);
+  const nilaiAtur = (b) => (b.dataset.atur === 'target' ? Number(b.dataset.nilai) : b.dataset.nilai);
+  document.querySelectorAll('#atur-tunggu [data-atur]').forEach((b) => b.addEventListener('click', () => {
+    if (b.getAttribute('aria-disabled') === 'true') return;
+    ubahAturOnline(b.dataset.atur, nilaiAtur(b));
   }));
-  $('segmen-kesulitan').addEventListener('keydown', (e) => {
+  document.querySelectorAll('#atur-tunggu .segmen').forEach((segmen) => segmen.addEventListener('keydown', (e) => {
     const arah = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
-    if (!arah) return;
+    const tombol = [...segmen.querySelectorAll('button')];
+    const kini = tombol.findIndex((b) => b.getAttribute('aria-checked') === 'true');
+    if (!arah || kini < 0 || tombol[kini].getAttribute('aria-disabled') === 'true') return;
     e.preventDefault();
-    const n = DO.KESULITAN.length;
-    kesulitanOnline = DO.KESULITAN[(DO.KESULITAN.indexOf(kesulitanOnline) + arah + n) % n];
-    tandaiKesulitan();
-    document.querySelector(`#segmen-kesulitan [data-kesulitan="${kesulitanOnline}"]`).focus();
-  });
+    const tujuan = tombol[(kini + arah + tombol.length) % tombol.length];
+    ubahAturOnline(tujuan.dataset.atur, nilaiAtur(tujuan));
+    tujuan.focus();
+  }));
 
   /* Kontrol */
   // Tekanan terasa di pointerdown. Kalau jari bergeser menjauh dari tombol, tekanannya
