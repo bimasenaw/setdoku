@@ -3,7 +3,7 @@
  * Selalu mencoba jaringan dulu, jadi perubahan setelah deploy langsung terlihat.
  * Salinan di perangkat hanya dipakai kalau jaringan gagal.
  */
-const CACHE = 'setdoku-1';
+const CACHE = 'setdoku-2';
 const FILE = [
   './',
   'index.html',
@@ -11,6 +11,9 @@ const FILE = [
   'puzzle.js',
   'level.js',
   'progres.js',
+  'duel-online.js',
+  'firebase-config.js',
+  'online.js',
   'gerak.js',
   'efek.js',
   'manifest.webmanifest',

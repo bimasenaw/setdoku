@@ -1184,7 +1184,7 @@ async function ujiProfil(browser, galat) {
       const q = e.getBoundingClientRect();
       return q.left < -0.5 || q.top < -0.5 || q.right > w + 0.5 || q.bottom > t + 0.5;
     }).map((e) => e.id || e.tagName), u.width, u.height);
-    cek(u.nama + ': menu dengan 5 tombol muat', menu.length === 0, menu.join());
+    cek(u.nama + ': menu dengan 6 tombol muat', menu.length === 0, menu.join());
     await page.screenshot({ path: path.join(FOTO, 'menu-' + u.nama + '.png') });
     await klik(page, 'tombol-profil');
     await tidur(700);
@@ -2931,7 +2931,8 @@ async function ujiKelancaran(browser, galat) {
   const browser = await puppeteer.launch({ executablePath: EDGE, headless: 'new', args: ['--mute-audio'] });
   const galat = [];
   const pilihan = process.argv[2];
-  const daftar = { tema: ujiTema, chapter: ujiChapter, nada: ujiNada, klikDuel: ujiKlikDuel, rilis: ujiRilis, akhir: ujiAkhirTahap2, profil: ujiProfil, skin: ujiSkin, cara: ujiCara, toko: ujiToko, hasil: ujiHasil, toast: ujiToast, peta: ujiPeta, ranked: ujiRanked, ranked20: ujiRanked20, ukuranRanked: ujiUkuranRanked, progres: ujiProgres, tombol: ujiTombol, seret: ujiSeret, duel: ujiDuel, level: ujiSemuaLevel, ukuran: ujiUkuran, sentuh: ujiSentuh, kurang: ujiGerakDikurangi, lancar: ujiKelancaran };
+  const ujiOnline = (b, g) => require('./uji-online.js')(b, g, { cek, tidur, bukaHalaman, klik, teksDi, FOTO });
+  const daftar = { online: ujiOnline, tema: ujiTema, chapter: ujiChapter, nada: ujiNada, klikDuel: ujiKlikDuel, rilis: ujiRilis, akhir: ujiAkhirTahap2, profil: ujiProfil, skin: ujiSkin, cara: ujiCara, toko: ujiToko, hasil: ujiHasil, toast: ujiToast, peta: ujiPeta, ranked: ujiRanked, ranked20: ujiRanked20, ukuranRanked: ujiUkuranRanked, progres: ujiProgres, tombol: ujiTombol, seret: ujiSeret, duel: ujiDuel, level: ujiSemuaLevel, ukuran: ujiUkuran, sentuh: ujiSentuh, kurang: ujiGerakDikurangi, lancar: ujiKelancaran };
   for (const [nama, fungsi] of Object.entries(daftar)) {
     if (pilihan && pilihan !== nama) continue;
     try {

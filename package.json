@@ -8,6 +8,7 @@
     "level": "node alat/buat-level.js",
     "warna": "node alat/warna.js",
     "uji:browser": "node tes-browser/uji.js",
+    "uji:emulator": "node tes-browser/emulator.js",
     "ikon": "node alat/buat-ikon.js"
   },
   "devDependencies": {

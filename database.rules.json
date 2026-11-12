@@ -1,0 +1,104 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$kode": {
+        ".read": "auth != null && (!data.child('tamu').exists() || data.child('tuan').val() === auth.uid || data.child('tamu').val() === auth.uid)",
+        ".write": "auth != null && ((newData.exists() && (!data.exists() || data.child('dibuat').val() < now - 7200000) && newData.child('tuan').val() === auth.uid && !newData.child('tamu').exists() && !newData.child('mulaiPada').exists() && !newData.child('jawaban').exists() && !newData.child('akhir').exists() && !newData.child('lanjut').exists()) || (data.exists() && !newData.exists() && (data.child('tuan').val() === auth.uid || data.child('tamu').val() === auth.uid) && (!data.child('tamu').exists() || data.child('dibuat').val() < now - 1800000)))",
+        ".validate": "$kode.matches(/^[A-HJ-NP-Z2-9]{5}$/) && newData.hasChildren(['v', 'dibuat', 'tuan', 'kesulitan', 'level', 'jenis', 'sidik', 'pemain']) && newData.child('pemain').child(newData.child('tuan').val()).exists() && (!newData.child('tamu').exists() || newData.child('pemain').child(newData.child('tamu').val()).exists()) && (!newData.child('mulaiPada').exists() || newData.child('tamu').exists())",
+        "v": {
+          ".validate": "newData.val() === 1"
+        },
+        "dibuat": {
+          ".validate": "(newData.val() === now) || (data.exists() && newData.val() === data.val())"
+        },
+        "tuan": {
+          ".validate": "(newData.val() === auth.uid) || (data.exists() && newData.val() === data.val())"
+        },
+        "kesulitan": {
+          ".validate": "newData.isString() && newData.val().matches(/^(easy|medium|hard)$/)"
+        },
+        "level": {
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 100 && newData.val() % 1 === 0"
+        },
+        "jenis": {
+          ".validate": "newData.isString() && newData.val().matches(/^(practice|ranked)$/)"
+        },
+        "sidik": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 4294967295 && newData.val() % 1 === 0"
+        },
+        "tamu": {
+          ".write": "auth != null && !data.exists() && newData.exists() && data.parent().child('tuan').exists() && data.parent().child('tuan').val() !== auth.uid && now < data.parent().child('dibuat').val() + 600000",
+          ".validate": "(newData.val() === auth.uid || (data.exists() && newData.val() === data.val())) && newData.val() !== newData.parent().child('tuan').val()"
+        },
+        "mulaiPada": {
+          ".write": "auth != null && !data.exists() && newData.exists() && data.parent().child('tuan').val() === auth.uid && data.parent().child('tamu').exists()",
+          ".validate": "(newData.val() === now) || (data.exists() && newData.val() === data.val())"
+        },
+        "pemain": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && newData.exists() && (!data.child('menyerah').exists() || newData.child('menyerah').val() === data.child('menyerah').val())",
+            ".validate": "newData.hasChildren(['nama', 'tersambung']) && (newData.parent().parent().child('tuan').val() === $uid || newData.parent().parent().child('tamu').val() === $uid)",
+            "nama": {
+              ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 32 && (!data.exists() || data.val() === newData.val())"
+            },
+            "tersambung": {
+              ".validate": "newData.isBoolean()"
+            },
+            "putusPada": {
+              ".validate": "newData.isNumber() && newData.val() <= now"
+            },
+            "menyerah": {
+              ".validate": "(!data.exists() && newData.val() === now) || (data.exists() && newData.val() === data.val())"
+            },
+            "$lain": {
+              ".validate": false
+            }
+          }
+        },
+        "jawaban": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && !data.exists() && newData.exists()",
+            ".validate": "newData.hasChildren(['papan', 'pada']) && data.parent().parent().child('mulaiPada').exists() && (data.parent().parent().child('tuan').val() === $uid || data.parent().parent().child('tamu').val() === $uid)",
+            "papan": {
+              ".validate": "newData.hasChildren(['0', '1', '2', '3', '4', '5', '6', '7', '8'])",
+              "$slot": {
+                ".validate": "$slot.matches(/^[0-8]$/) && newData.isNumber() && newData.val() >= -1 && newData.val() <= 80 && newData.val() % 1 === 0"
+              }
+            },
+            "pada": {
+              ".validate": "(newData.val() === now) || (data.exists() && newData.val() === data.val())"
+            },
+            "$lain": {
+              ".validate": false
+            }
+          }
+        },
+        "akhir": {
+          ".write": "auth != null && !data.exists() && newData.exists() && data.parent().child('mulaiPada').exists() && ((data.parent().child('tuan').val() === auth.uid && data.parent().child('pemain').child(data.parent().child('tamu').val()).child('tersambung').val() === false && data.parent().child('pemain').child(data.parent().child('tamu').val()).child('putusPada').val() + 30000 <= now) || (data.parent().child('tamu').val() === auth.uid && data.parent().child('pemain').child(data.parent().child('tuan').val()).child('tersambung').val() === false && data.parent().child('pemain').child(data.parent().child('tuan').val()).child('putusPada').val() + 30000 <= now))",
+          ".validate": "newData.hasChildren(['pemenang', 'alasan', 'pada'])",
+          "pemenang": {
+            ".validate": "(newData.val() === auth.uid) || (data.exists() && newData.val() === data.val())"
+          },
+          "alasan": {
+            ".validate": "newData.val() === 'putus'"
+          },
+          "pada": {
+            ".validate": "(newData.val() === now) || (data.exists() && newData.val() === data.val())"
+          },
+          "$lain": {
+            ".validate": false
+          }
+        },
+        "lanjut": {
+          ".write": "auth != null && !data.exists() && newData.exists() && data.parent().child('mulaiPada').exists() && (data.parent().child('tuan').val() === auth.uid || data.parent().child('tamu').val() === auth.uid)",
+          ".validate": "newData.isString() && newData.val().matches(/^[A-HJ-NP-Z2-9]{5}$/)"
+        },
+        "$lain": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}
